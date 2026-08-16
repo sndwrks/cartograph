@@ -1,0 +1,62 @@
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    env_file: .env
+    volumes:
+      # pg18 images keep data in a versioned subdir under /var/lib/postgresql;
+      # mounting at .../data makes the container refuse to start
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      # Derived from POSTGRES_* so .env's DATABASE_URL (host-tools only) can't drift
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    entrypoint: ["./entrypoint.sh"]
+    # empty command so the entrypoint takes its no-args path (migrate + serve);
+    # `docker compose run api <cmd>` passes <cmd> through and execs it directly
+    command: []
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: ./web
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+  mcp:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    command: ["uv", "run", "python", "-m", "codegraph.mcp_server"]
+    ports:
+      - "8765:8765"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # /healthz is the only route exempt from bearer auth
+      test: ["CMD", "curl", "-fsS", "http://localhost:8765/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

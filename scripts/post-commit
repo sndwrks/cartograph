@@ -1,0 +1,38 @@
+#!/bin/sh
+# CodeGraph post-commit hook: incrementally ingest the files this commit changed.
+#
+# Configuration (environment, e.g. exported from your shell profile):
+#   CODEGRAPH_COMPOSE_DIR  path to the code-graph checkout (the docker compose
+#                          project). Default: ~/code-graph
+#   CODEGRAPH_REPO         repository name as registered in codegraph.
+#                          Default: the git repo's directory name. Register it
+#                          with --root /repos/<name>; this hook mounts the repo
+#                          there for the run.
+#
+# A hook must never block a commit: every path exits 0, and failures go to
+# .git/codegraph-hook.log instead of the terminal.
+
+COMPOSE_DIR="${CODEGRAPH_COMPOSE_DIR:-$HOME/code-graph}"
+TOPLEVEL="$(git rev-parse --show-toplevel)" || exit 0
+REPO_NAME="${CODEGRAPH_REPO:-$(basename "$TOPLEVEL")}"
+LOG="$(git rev-parse --git-dir)/codegraph-hook.log"
+
+{
+    echo "== $(date) commit $(git rev-parse --short HEAD)"
+    cd "$COMPOSE_DIR" || { echo "compose dir missing: $COMPOSE_DIR"; exit 0; }
+
+    # skip silently when the stack isn't running
+    [ -n "$(docker compose ps -q api 2>/dev/null)" ] || { echo "api not running; skipped"; exit 0; }
+
+    CHANGED=$(git -C "$TOPLEVEL" diff-tree --no-commit-id --name-only -r HEAD)
+    [ -n "$CHANGED" ] || { echo "no files changed; skipped"; exit 0; }
+
+    # shellcheck disable=SC2086  # word-splitting CHANGED is intended
+    docker compose run --rm \
+        -v "$TOPLEVEL:/repos/$REPO_NAME" \
+        api uv run python -m codegraph.ingest run \
+        --repo "$REPO_NAME" --trigger hook --enrich --files $CHANGED \
+        || echo "ingest failed (see above)"
+} >>"$LOG" 2>&1
+
+exit 0

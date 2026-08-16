@@ -1,0 +1,31 @@
+services:
+  db:
+    # Loopback-only, dev-only: lets host-side pytest reach Postgres. The base
+    # compose file publishes no db port.
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  api:
+    volumes:
+      - ./backend/src:/app/src
+    entrypoint: []
+    command:
+      [
+        "sh",
+        "-c",
+        "uv run alembic upgrade head && exec uv run uvicorn codegraph.api.app:app --host 0.0.0.0 --port 8000 --reload",
+      ]
+
+  mcp:
+    volumes:
+      - ./backend/src:/app/src
+
+  web:
+    image: node:22-alpine
+    build: !reset null
+    working_dir: /app
+    volumes:
+      - ./web:/app
+    command: ["sh", "-c", "npm install && npm run dev -- --host"]
+    ports: !override
+      - "5173:5173"
