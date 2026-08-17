@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -56,25 +57,48 @@ async def run(
     llm: LLMClient,
     limit: int | None = None,
 ) -> dict:
-    min_lines = get_settings().SUMMARY_MIN_LINES
+    settings = get_settings()
+    min_lines = settings.SUMMARY_MIN_LINES
     nodes = await q.nodes_needing_summary(session, repo.id, min_lines, limit)
     root = Path(repo.root_path)
+    total = len(nodes)
     summarized = failed = skipped = 0
-    for node in nodes:
+
+    # Only the API calls run concurrently: AsyncSession is not safe for
+    # concurrent use, so every DB write happens back on this coroutine.
+    gate = asyncio.Semaphore(max(1, settings.ENRICH_CONCURRENCY))
+
+    async def summarize(node: Node) -> tuple[Node, str | None]:
         source = _read_source(root, node)
         if source is None:
-            skipped += 1
-            continue
-        try:
-            summary = await llm.complete(_prompt(node, source), max_tokens=300)
-        except Exception:
-            logger.exception("summary failed for %s", node.qualified_name)
-            failed += 1
-            continue
-        if summary:
-            await q.set_summary(session, node.id, summary, node.content_hash)
-            summarized += 1
-        else:
-            failed += 1
-    await session.commit()
+            return node, None
+        async with gate:
+            try:
+                return node, await llm.complete(_prompt(node, source), max_tokens=300)
+            except Exception:
+                logger.exception("summary failed for %s", node.qualified_name)
+                return node, ""
+
+    logger.info("summaries: %d nodes to summarize", total)
+    window = max(1, settings.ENRICH_COMMIT_EVERY)
+    for start in range(0, total, window):
+        batch = nodes[start : start + window]
+        for node, summary in await asyncio.gather(*(summarize(n) for n in batch)):
+            if summary is None:
+                skipped += 1
+            elif summary:
+                await q.set_summary(session, node.id, summary, node.content_hash)
+                summarized += 1
+            else:
+                failed += 1
+        # commit per window so an interrupted run keeps everything up to here
+        await session.commit()
+        logger.info(
+            "summaries: %d/%d done (summarized=%d failed=%d skipped=%d)",
+            min(start + window, total),
+            total,
+            summarized,
+            failed,
+            skipped,
+        )
     return {"summarized": summarized, "failed": failed, "skipped": skipped}

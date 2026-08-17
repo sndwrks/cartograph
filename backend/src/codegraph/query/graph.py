@@ -13,6 +13,7 @@ from codegraph.api.schemas import (
     NodeOut,
     StubEdgeOut,
 )
+from codegraph.config import get_settings
 from codegraph.models import (
     Community,
     CommunityEdge,
@@ -47,21 +48,33 @@ async def overview(session: AsyncSession, repo_name: str) -> dict | None:
     repo = await get_repository_by_name(session, repo_name)
     if repo is None:
         return None
+    min_size = get_settings().COMMUNITY_MIN_SIZE
     communities = (
         await session.scalars(
             select(Community)
-            .where(Community.repository_id == repo.id)
+            .where(
+                Community.repository_id == repo.id,
+                Community.node_count >= min_size,
+            )
             .order_by(Community.id)
         )
     ).all()
-    community_edges = (
-        await session.scalars(
-            select(CommunityEdge)
-            .join(Community, CommunityEdge.src_community_id == Community.id)
-            .where(Community.repository_id == repo.id)
-            .order_by(CommunityEdge.src_community_id, CommunityEdge.dst_community_id)
-        )
-    ).all()
+    # an edge is only meaningful if both endpoints survived the size filter
+    kept = {community.id for community in communities}
+    community_edges = [
+        edge
+        for edge in (
+            await session.scalars(
+                select(CommunityEdge)
+                .join(Community, CommunityEdge.src_community_id == Community.id)
+                .where(Community.repository_id == repo.id)
+                .order_by(
+                    CommunityEdge.src_community_id, CommunityEdge.dst_community_id
+                )
+            )
+        ).all()
+        if edge.src_community_id in kept and edge.dst_community_id in kept
+    ]
     return {
         "communities": [CommunityOut.from_community(c) for c in communities],
         "community_edges": [

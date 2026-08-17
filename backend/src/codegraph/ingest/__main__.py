@@ -95,13 +95,14 @@ async def amain(args: argparse.Namespace) -> int:
             traceback.print_exc()
             return 1
 
+        incomplete: list[tuple[str, int]] = []
         if args.enrich:
             from codegraph.enrich.llm import build_llm
-            from codegraph.enrich.runner import run_phases
+            from codegraph.enrich.runner import failed_phases, run_phases
             from codegraph.enrich.voyage import build_embedder
 
             try:
-                stats["enrich"] = await run_phases(
+                enrich_stats = await run_phases(
                     session,
                     repo,
                     ("docs", "summaries", "embeddings"),
@@ -111,6 +112,8 @@ async def amain(args: argparse.Namespace) -> int:
             except Exception:
                 traceback.print_exc()
                 return 1
+            stats["enrich"] = enrich_stats
+            incomplete = failed_phases(enrich_stats)
 
         # fold the chained-phase results into the run row's stats
         rows = await q.list_runs(session, repo.name, limit=1)
@@ -120,6 +123,14 @@ async def amain(args: argparse.Namespace) -> int:
             await session.commit()
 
         print(json.dumps(stats))
+        if incomplete:
+            from codegraph.enrich.runner import EXIT_PARTIAL_FAILURE
+
+            for phase, count in incomplete:
+                logging.getLogger(__name__).warning(
+                    "%s: %d item(s) failed and were left unprocessed", phase, count
+                )
+            return EXIT_PARTIAL_FAILURE
         return 0
 
 

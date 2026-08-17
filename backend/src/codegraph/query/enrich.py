@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from codegraph.config import get_settings
 from codegraph.models import (
     Community,
     CommunityEdge,
@@ -93,7 +94,11 @@ async def set_embeddings(
 async def communities_needing_label(
     session: AsyncSession, repository_id: int, force: bool = False
 ) -> list[Community]:
-    stmt = select(Community).where(Community.repository_id == repository_id)
+    stmt = select(Community).where(
+        Community.repository_id == repository_id,
+        # naming a cluster of one costs an LLM call and tells you nothing
+        Community.node_count >= get_settings().COMMUNITY_MIN_SIZE,
+    )
     if not force:
         stmt = stmt.where(Community.label.is_(None))
     return list((await session.scalars(stmt.order_by(Community.id))).all())

@@ -18,6 +18,20 @@ ALL_PHASES = ("docs", "summaries", "embeddings", "communities", "kb")
 LLM_PHASES = frozenset({"docs", "summaries", "communities"})
 EMBED_PHASES = frozenset({"embeddings", "kb"})
 
+# every phase counts its own write-offs rather than raising, so "the process
+# exited 0" is not evidence the run did any work. Callers use this to tell a
+# clean run from one that merely finished.
+EXIT_PARTIAL_FAILURE = 3
+
+
+def failed_phases(results: dict) -> list[tuple[str, int]]:
+    """Phases that finished but wrote off work, as (phase, failed) pairs."""
+    return [
+        (phase, stats["failed"])
+        for phase, stats in results.items()
+        if isinstance(stats, dict) and stats.get("failed")
+    ]
+
 
 async def run_phases(
     session: AsyncSession,

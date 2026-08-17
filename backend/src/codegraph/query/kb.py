@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from codegraph.enrich.voyage import EmbeddingClient, get_default_embedder
 from codegraph.models import KnowledgeEntry
+
+logger = logging.getLogger(__name__)
 
 
 class DuplicateTermError(ValueError):
@@ -114,6 +118,9 @@ async def lookup(
         try:
             [query_vector] = await embedder.embed([term], input_type="query")
         except Exception:
+            # a rate-limited lookup is otherwise indistinguishable from a term
+            # the KB genuinely doesn't define
+            logger.exception("kb vector lookup failed for %r", term)
             return {"match": "none", "results": []}
         vector_hits = (
             await session.scalars(

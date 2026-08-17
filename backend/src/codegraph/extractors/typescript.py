@@ -270,15 +270,27 @@ class TypeScriptExtractor:
                     outer = outer.parent
             return outer
 
+        used: set[tuple[str, str]] = {(module_qname, "module")}
+
         def emit_symbol(kind: str, name: str, anchor: Node) -> str:
             qname = f"{scopes[-1][1]}.{name}"
             span = span_for(anchor)
+            start_line = _line(span)
+            if (qname, kind) in used:
+                # Sibling anonymous scopes can legitimately define the same
+                # name — four useEffect callbacks each declaring
+                # handleCreateSuccess — and nothing but position tells them
+                # apart. Suffixing keeps them distinct (the DB has a unique
+                # constraint on (repository_id, qualified_name, kind)) and
+                # traceable. The first occurrence keeps the clean name.
+                qname = f"{qname}@L{start_line}"
+            used.add((qname, kind))
             symbols.append(
                 SymbolRecord(
                     kind=kind,
                     name=name,
                     qualified_name=qname,
-                    start_line=_line(span),
+                    start_line=start_line,
                     end_line=span.end_point.row + 1,
                     content_hash=hash_content(source[span.start_byte : span.end_byte]),
                 )
@@ -404,6 +416,23 @@ class TypeScriptExtractor:
                         visit_fn_scope(
                             "function", _text(source, name_node), declarator, value
                         )
+                    elif (
+                        name_node is not None
+                        and name_node.type == "identifier"
+                        and value is not None
+                        and value.type == "object"
+                    ):
+                        # An object literal's methods belong to the binding, not
+                        # the module: three sibling codec objects each defining
+                        # encode/decode would otherwise all become
+                        # <module>.encode and collide on (qualified_name, kind).
+                        # The binding itself emits no symbol — it only namespaces.
+                        scopes.append(
+                            ("object", f"{scopes[-1][1]}.{_text(source, name_node)}")
+                        )
+                        for child in value.named_children:
+                            visit(child)
+                        scopes.pop()
                     else:
                         visit(declarator)
                 return

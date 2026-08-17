@@ -13,8 +13,17 @@ from codegraph.db import get_sessionmaker
 from codegraph.query import ingest as q_ingest
 
 from .llm import build_llm
-from .runner import ALL_PHASES, EMBED_PHASES, LLM_PHASES, run_phases
+from .runner import (
+    ALL_PHASES,
+    EMBED_PHASES,
+    EXIT_PARTIAL_FAILURE,
+    LLM_PHASES,
+    failed_phases,
+    run_phases,
+)
 from .voyage import build_embedder
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -64,6 +73,12 @@ async def amain(args: argparse.Namespace) -> int:
             traceback.print_exc()
             return 1
     print(json.dumps(results))
+    incomplete = failed_phases(results)
+    for phase, count in incomplete:
+        logger.warning("%s: %d item(s) failed and were left unprocessed", phase, count)
+    if incomplete:
+        logger.warning("re-run to retry — completed work is already committed")
+        return EXIT_PARTIAL_FAILURE
     return 0
 
 

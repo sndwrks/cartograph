@@ -11,7 +11,9 @@ dependencies = [
     "asyncpg==0.31.0",
     "alembic>=1.19.1",
     "pgvector==0.5.0",
-    "tree-sitter>=0.25,<0.27",
+    # core 0.26 segfaults on Node.start_byte for trees from the 0.23-ABI
+    # typescript grammar (0.23.2 is the newest published); hold at 0.25.x
+    "tree-sitter>=0.25,<0.26",
     "tree-sitter-python==0.25.0",
     "tree-sitter-typescript==0.23.2",
     "tree-sitter-javascript==0.25.0",

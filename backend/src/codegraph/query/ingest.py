@@ -98,12 +98,34 @@ async def delete_nodes_for_path(
     return result.rowcount or 0
 
 
+# asyncpg binds parameters as int16, so a single statement can carry at most
+# 32767 of them; a full ingest of a mid-size repo blows past that in one batch.
+# Chunk by row width and leave headroom.
+_MAX_BIND_PARAMS = 30000
+
+
+def _param_chunks(rows: list[dict]) -> Iterable[list[dict]]:
+    width = max((len(row) for row in rows), default=1)
+    size = max(1, _MAX_BIND_PARAMS // max(1, width))
+    for start in range(0, len(rows), size):
+        yield rows[start : start + size]
+
+
 async def upsert_nodes(
     session: AsyncSession, rows: list[dict]
 ) -> dict[str, int]:
     """Insert node rows, last-write-wins on (repo, qname, kind). Returns qname -> id."""
     if not rows:
         return {}
+    ids: dict[str, int] = {}
+    for chunk in _param_chunks(rows):
+        ids.update(await _upsert_nodes_chunk(session, chunk))
+    return ids
+
+
+async def _upsert_nodes_chunk(
+    session: AsyncSession, rows: list[dict]
+) -> dict[str, int]:
     stmt = pg_insert(Node).values(rows)
     stmt = stmt.on_conflict_do_update(
         index_elements=["repository_id", "qualified_name", "kind"],
@@ -125,11 +147,14 @@ async def insert_edges_ignore_conflicts(
 ) -> int:
     if not rows:
         return 0
-    stmt = pg_insert(Edge).values(rows).on_conflict_do_nothing(
-        index_elements=["src_id", "dst_id", "rel", "src_line"]
-    )
-    result = await session.execute(stmt)
-    return result.rowcount or 0
+    inserted = 0
+    for chunk in _param_chunks(rows):
+        stmt = pg_insert(Edge).values(chunk).on_conflict_do_nothing(
+            index_elements=["src_id", "dst_id", "rel", "src_line"]
+        )
+        result = await session.execute(stmt)
+        inserted += result.rowcount or 0
+    return inserted
 
 
 async def delete_ref_edges_from_paths(

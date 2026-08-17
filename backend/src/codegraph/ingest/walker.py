@@ -7,7 +7,19 @@ from pathlib import Path, PurePosixPath
 
 from codegraph.extractors import get_extractor_for
 
-DENY_DIRS = frozenset({"node_modules", ".venv", "dist", "build", "__pycache__"})
+DENY_DIRS = frozenset(
+    {
+        "node_modules",
+        ".venv",
+        "dist",
+        "build",
+        "__pycache__",
+        # minified bundles: 33 such files in one repo carried 11k symbols —
+        # more than the entire hand-written source — and summarizing them is
+        # pure enrichment spend on generated output
+        "storybook-static",
+    }
+)
 
 
 def walk_repo(root: Path) -> list[str]:
