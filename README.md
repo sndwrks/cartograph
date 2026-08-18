@@ -1,6 +1,6 @@
-# CodeGraph
+# Cartograph
 
-A self-hosted codebase knowledge graph. CodeGraph ingests one or more repositories and
+A self-hosted codebase knowledge graph. Cartograph ingests one or more repositories and
 produces a persistent, queryable graph of code entities (files, classes, functions) and
 their relationships (imports, calls, inheritance, references), enriched with vector
 embeddings over LLM-written summaries. Humans explore the graph through a React SPA;
@@ -17,7 +17,7 @@ AI assistants query it through an MCP server backed by the same query layer.
 - Web: http://localhost:5173 (nginx, proxies `/api` to the API)
 - MCP: http://localhost:8765
 - The database publishes **no host port** in prod mode; all access goes through
-  the API or MCP. Ad-hoc SQL: `docker compose exec db psql -U codegraph`.
+  the API or MCP. Ad-hoc SQL: `docker compose exec db psql -U cartograph`.
 
 `up.sh` edits nothing you've already written: it copies `.env.example` to `.env`
 only when `.env` is absent, so **the first run brings the stack up with
@@ -59,11 +59,13 @@ semantic search need them.
 claude.ai and Claude Code, not API calls — the Console is a separate account
 surface with its own prepaid credit balance, and enrichment fails with a `401`
 until that balance is funded. Summaries run on `claude-sonnet-5`
-(`backend/src/codegraph/enrich/llm.py`), billed per input/output token at the
+(`backend/src/cartograph/enrich/llm.py`), billed per input/output token at the
 rate on Anthropic's [pricing page](https://platform.claude.com/docs/en/pricing);
-embeddings run on `voyage-code-3` (`backend/src/codegraph/enrich/voyage.py`).
+embeddings run on `voyage-code-3` (`backend/src/cartograph/enrich/voyage.py`).
 Cost scales with repository size and is charged only for what changed —
 summaries are cached on content hashes, so the expensive run is the first one.
+As an example here, an ~8,000 node, ~60,000 edge codebase cost ~$24 to generate
+everything.
 
 Voyage issues a **keyless free tier** (3 requests/min, 10K tokens/min) that the
 embeddings phase will hit almost immediately on a real repository; see the
@@ -81,7 +83,7 @@ docs phases`). Concretely, without them:
 - **Ingest, clustering, the SPA, and the graph-shaped MCP tools work fully** —
   `get_node`, `get_neighbors`, `impact_of`, `post_message`, `read_board` never
   touch either vendor.
-- **`--enrich` and `python -m codegraph.enrich` exit immediately** on the first
+- **`--enrich` and `python -m cartograph.enrich` exit immediately** on the first
   phase that needs the missing key.
 - **`search_code` degrades rather than fails.** Search is text + semantic merged
   by reciprocal rank fusion; with no Voyage key the semantic half is skipped and
@@ -99,7 +101,7 @@ reload, the Vite dev server, and Postgres published on `127.0.0.1:5433`
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
-DB-touching tests use a dedicated `codegraph_test` database created
+DB-touching tests use a dedicated `cartograph_test` database created
 automatically by the test suite. The whole stack doesn't need to be up for them
 — just the database:
 
@@ -116,9 +118,9 @@ hash-based; `--full` re-ingests everything, `--files p1 p2` restricts the walk):
 
 ```sh
 docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
-  uv run python -m codegraph.ingest register --name myrepo --root /repos/myrepo
+  uv run python -m cartograph.ingest register --name myrepo --root /repos/myrepo
 docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
-  uv run python -m codegraph.ingest run --repo myrepo
+  uv run python -m cartograph.ingest run --repo myrepo
 ```
 
 Every run writes an `ingest_runs` row with per-phase timings and node/edge deltas.
@@ -129,17 +131,17 @@ Ingest alone gives you structure — nodes and edges. Semantic search needs the
 tier-3 enrichment phases, which are the only jobs that spend API money — they
 need `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` and a funded balance on each
 (see [API keys and billing](#api-keys-and-billing)).
-`python -m codegraph.enrich` runs them; the order matters, because
+`python -m cartograph.enrich` runs them; the order matters, because
 `embeddings` embeds the text that `summaries` wrote:
 
 ```sh
 # 1. summaries — reads source files, so the repo MUST still be mounted
 docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
-  uv run python -m codegraph.enrich --repo myrepo --phase summaries
+  uv run python -m cartograph.enrich --repo myrepo --phase summaries
 
 # 2. embeddings — reads summaries from the database; no mount needed
 docker compose run --rm api \
-  uv run python -m codegraph.enrich --repo myrepo --phase embeddings
+  uv run python -m cartograph.enrich --repo myrepo --phase embeddings
 ```
 
 `--phase all` runs `docs → summaries → embeddings → communities → kb` in that
@@ -173,7 +175,7 @@ until it comes back clean. Guard the loop on exit code 3 so a real error (1 or
 ```sh
 while :; do
   docker compose run --rm api \
-    uv run python -m codegraph.enrich --repo myrepo --phase embeddings
+    uv run python -m cartograph.enrich --repo myrepo --phase embeddings
   status=$?
   [ "$status" -eq 3 ] || break        # 0 = done, 1/2 = real failure
   echo "partial run — retrying in 60s"
@@ -200,22 +202,22 @@ Install the post-commit hook into any registered repository:
 
 ```sh
 ./scripts/install-hook.sh /path/to/your-repo
-export CODEGRAPH_COMPOSE_DIR=/path/to/code-graph   # this checkout
-export CODEGRAPH_REPO=your-repo                    # registered with --root /repos/your-repo
+export CARTOGRAPH_COMPOSE_DIR=/path/to/code-graph   # this checkout
+export CARTOGRAPH_REPO=your-repo                    # registered with --root /repos/your-repo
 ```
 
 Put those exports in your shell profile — the hook runs in whatever environment
-git hands it. `CODEGRAPH_COMPOSE_DIR` defaults to `~/code-graph` and the hook
+git hands it. `CARTOGRAPH_COMPOSE_DIR` defaults to `~/code-graph` and the hook
 logs `compose dir missing` and exits 0 if that path is wrong, so a silent
-no-op usually means this is unset. `CODEGRAPH_REPO` defaults to the basename of
+no-op usually means this is unset. `CARTOGRAPH_REPO` defaults to the basename of
 the repo's toplevel directory, which is already correct whenever you registered
 the repo under its own directory name; the hook mounts the working tree at
-`/repos/$CODEGRAPH_REPO`, so that name must match the registered `--root`.
+`/repos/$CARTOGRAPH_REPO`, so that name must match the registered `--root`.
 
 Each commit then incrementally ingests only the changed files
 (`--trigger hook --enrich`), re-clusters only past the changed-edges
 threshold, and never blocks the commit — failures land in
-`.git/codegraph-hook.log`, and the hook exits immediately when the compose
+`.git/cartograph-hook.log`, and the hook exits immediately when the compose
 stack isn't running. See `CLAUDE.md` for the rules assistants follow when
 using the MCP server.
 
@@ -259,27 +261,27 @@ want to query:
 ```json
 {
   "mcpServers": {
-    "codegraph": {
+    "cartograph": {
       "type": "http",
       "url": "http://localhost:8765/mcp",
-      "headers": { "Authorization": "Bearer ${CODEGRAPH_MCP_TOKEN}" }
+      "headers": { "Authorization": "Bearer ${CARTOGRAPH_MCP_TOKEN}" }
     }
   }
 }
 ```
 
 ```sh
-echo "export CODEGRAPH_MCP_TOKEN=$NEW" >> ~/.zshrc   # then open a new shell
+echo "export CARTOGRAPH_MCP_TOKEN=$NEW" >> ~/.zshrc   # then open a new shell
 ```
 
 Settings-file `env` blocks (`.claude/settings.local.json`) do **not** feed this
 expansion — `claude mcp list` reports `Missing environment variables:
-CODEGRAPH_MCP_TOKEN` unless the variable is exported in the shell. If you would
+CARTOGRAPH_MCP_TOKEN` unless the variable is exported in the shell. If you would
 rather not manage an env var, skip `.mcp.json` and let Claude Code store the
 literal token outside the repo in `~/.claude.json`:
 
 ```sh
-claude mcp add codegraph --scope local --transport http http://localhost:8765/mcp \
+claude mcp add cartograph --scope local --transport http http://localhost:8765/mcp \
   --header "Authorization: Bearer $MCP_BEARER_TOKEN"
 ```
 

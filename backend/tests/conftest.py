@@ -4,7 +4,7 @@ DB-touching tests need the dev-override Postgres reachable on 127.0.0.1:5433:
 
     docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 
-The suite creates and migrates a dedicated `codegraph_test` database; each test
+The suite creates and migrates a dedicated `cartograph_test` database; each test
 runs inside an outer transaction that is rolled back on teardown.
 """
 
@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from codegraph.models import (
+from cartograph.models import (
     Community,
     CommunityEdge,
     Edge,
@@ -38,7 +38,7 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://codegraph:change-me@127.0.0.1:5433/codegraph_test",
+    "postgresql+asyncpg://codegraph:change-me@127.0.0.1:5433/cartograph_test",
 )
 
 

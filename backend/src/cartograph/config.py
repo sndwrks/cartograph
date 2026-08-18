@@ -1,0 +1,57 @@
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings read from the environment.
+
+    Every field has a default so importing this module never crashes; services
+    that actually need a value (db access, MCP auth) validate at use time.
+    """
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    DATABASE_URL: str = "postgresql+asyncpg://cartograph:change-me@db:5432/cartograph"
+    ANTHROPIC_API_KEY: str = ""
+    VOYAGE_API_KEY: str = ""
+    MCP_BEARER_TOKEN: str = ""
+    # clustering is skipped on incremental runs that changed fewer edges than
+    # this, so community labels stay stable across small commits (slice 06)
+    RECLUSTER_EDGE_THRESHOLD: int = 50
+    # symbols spanning fewer lines than this aren't worth summary tokens (slice 13)
+    SUMMARY_MIN_LINES: int = 3
+    # Leiden leaves a long tail of single-node communities — 2517 of 2586 on a
+    # 9k-node repo. They swamp the overview canvas and each would cost an LLM
+    # call to "label" a cluster of one. Communities smaller than this are kept
+    # in the graph but excluded from the overview and from labeling.
+    COMMUNITY_MIN_SIZE: int = 2
+    # in-flight LLM calls during enrichment. The summaries phase is otherwise
+    # strictly sequential (~7s/node => ~17h for a 9k-node repo). Lower this if
+    # the API starts returning 429s.
+    ENRICH_CONCURRENCY: int = 12
+    # nodes per commit: an interrupted run loses at most this much work
+    ENRICH_COMMIT_EVERY: int = 100
+    # voyageai's AsyncClient defaults to max_retries=0, which disables the
+    # tenacity backoff it already ships (429/503/timeout, exponential jitter
+    # capped at 16s). Without this a single 429 kills a whole batch.
+    EMBED_MAX_RETRIES: int = 5
+    # seconds. The client defaults to no timeout at all, so one hung request
+    # would stall the strictly-sequential embed loop forever.
+    EMBED_TIMEOUT_S: float = 60.0
+    # texts per Voyage request; voyage-code-3 caps a request at 1000 inputs
+    EMBED_BATCH_SIZE: int = 128
+    # estimated tokens per request, kept under voyage-code-3's 120K ceiling so
+    # a handful of very long summaries can't push a full batch over it
+    EMBED_MAX_TOKENS_PER_REQUEST: int = 100_000
+    # seconds to wait between embed requests. 0 = no throttle, which is right
+    # on standard rate limits. The keyless free tier allows 3 RPM / 10K TPM —
+    # set this to 21 (and EMBED_MAX_TOKENS_PER_REQUEST to ~8000) to stay under
+    # it, e.g. in the minutes after adding a payment method while the new
+    # limits propagate.
+    EMBED_MIN_INTERVAL_S: float = 0.0
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

@@ -14,11 +14,11 @@ Slices 07 and 08 (query functions). Replaces the slice-01 stub.
 
 ## Requirements
 
-### 1. Server — `codegraph/mcp_server/`
+### 1. Server — `cartograph/mcp_server/`
 
-1. Official MCP Python SDK (`mcp` package; add to `pyproject.toml`), `FastMCP` server named `codegraph`, **streamable HTTP** transport bound to `0.0.0.0:8765` (the compose service already publishes 8765 to the host).
+1. Official MCP Python SDK (`mcp` package; add to `pyproject.toml`), `FastMCP` server named `cartograph`, **streamable HTTP** transport bound to `0.0.0.0:8765` (the compose service already publishes 8765 to the host).
 2. **Auth:** every HTTP request must carry `Authorization: Bearer <MCP_BEARER_TOKEN>` matching the env value (constant-time compare). Missing/wrong token → 401 before any MCP handling. Implement as ASGI middleware wrapping the SDK's streamable-http app. If `MCP_BEARER_TOKEN` is unset, refuse to start with a clear error.
-3. DB access: build the async engine/session from `codegraph.db` exactly as the API does; one session per tool invocation.
+3. DB access: build the async engine/session from `cartograph.db` exactly as the API does; one session per tool invocation.
 4. Server instructions (the MCP `instructions` field) must state: *prefer `kb_lookup` when encountering unfamiliar acronyms or internal terms; treat `name_match` edges as unproven hints, `llm_inferred` as model judgment, `resolved` as proven.*
 
 ### 2. Tools
@@ -33,20 +33,20 @@ All results JSON-serializable dicts reusing slice-07 schema shapes; **every edge
 
 ### 3. Compose
 
-`mcp` service command becomes `uv run python -m codegraph.mcp_server`; healthcheck hits an unauthenticated `/healthz` route in the same ASGI app (the only route exempt from auth).
+`mcp` service command becomes `uv run python -m cartograph.mcp_server`; healthcheck hits an unauthenticated `/healthz` route in the same ASGI app (the only route exempt from auth).
 
 ### 4. Client config docs
 
 Root `README.md` gains a section: connect from host Claude Code with
 
 ```
-claude mcp add codegraph --transport http http://localhost:8765/mcp \
+claude mcp add cartograph --transport http http://localhost:8765/mcp \
   --header "Authorization: Bearer $MCP_BEARER_TOKEN"
 ```
 
 ## Files
 
-- `backend/src/codegraph/mcp_server/{__main__.py,server.py,auth.py,tools.py}` (stub replaced)
+- `backend/src/cartograph/mcp_server/{__main__.py,server.py,auth.py,tools.py}` (stub replaced)
 - `backend/tests/mcp/test_auth.py`, `backend/tests/mcp/test_tools.py`
 - `README.md` (connection section), `docker-compose.yml` (mcp command/healthcheck)
 

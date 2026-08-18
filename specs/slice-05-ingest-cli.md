@@ -2,7 +2,7 @@
 
 ## Goal
 
-`python -m codegraph.ingest` registers repositories and loads them into the graph: walk files, run the tier-1 extractors, resolve references, and persist nodes and edges — incrementally, so a re-run after a small change touches only what changed. Every run writes an `ingest_runs` record. After this slice, M1 is complete: a real repository becomes a queryable graph.
+`python -m cartograph.ingest` registers repositories and loads them into the graph: walk files, run the tier-1 extractors, resolve references, and persist nodes and edges — incrementally, so a re-run after a small change touches only what changed. Every run writes an `ingest_runs` record. After this slice, M1 is complete: a real repository becomes a queryable graph.
 
 ## Depends on
 
@@ -14,7 +14,7 @@ Slices 02 (models/db) and 03 (extractor contract + Python). Works with slice 04 
 
 ## Requirements
 
-### 1. CLI — `codegraph/ingest/__main__.py`
+### 1. CLI — `cartograph/ingest/__main__.py`
 
 argparse or typer, two subcommands:
 
@@ -61,12 +61,12 @@ On exception: `failed`, `error` = traceback string, then re-raise for the non-ze
 
 ### 6. Query layer seed
 
-Create `codegraph/query/__init__.py` and `codegraph/query/ingest.py` holding the SQL this slice needs (symbol-table load, dependent-file lookup, run CRUD). The convention starts now: **ingest code calls query functions; no inline SQL elsewhere.**
+Create `cartograph/query/__init__.py` and `cartograph/query/ingest.py` holding the SQL this slice needs (symbol-table load, dependent-file lookup, run CRUD). The convention starts now: **ingest code calls query functions; no inline SQL elsewhere.**
 
 ## Files
 
-- `backend/src/codegraph/ingest/{__init__.py,__main__.py,walker.py,loader.py}`
-- `backend/src/codegraph/query/{__init__.py,ingest.py}`
+- `backend/src/cartograph/ingest/{__init__.py,__main__.py,walker.py,loader.py}`
+- `backend/src/cartograph/query/{__init__.py,ingest.py}`
 - `backend/tests/ingest/test_ingest_incremental.py` (+ conftest reusing slice 02's DB fixtures; fixture repo can reuse `tests/extractors/fixtures/py_sample/`)
 
 ## Acceptance criteria
@@ -75,7 +75,7 @@ Create `codegraph/query/__init__.py` and `codegraph/query/ingest.py` holding the
 2. **No-op re-run:** run again with no file changes → `files_changed == 0`, zero node/edge deltas, node ids unchanged (prove nothing was rewritten).
 3. **Incremental:** modify one fixture file (add a function + a call into another module), re-run. Assert: only that file's nodes were replaced (other node ids stable), the new edge exists, and an edge **into** the changed file from an unchanged file still exists afterward (dependent-expansion proof).
 4. **Deletion:** remove a fixture file, re-run with `--full` or with the file listed — its nodes are gone and no dangling edges remain.
-5. Works end-to-end in compose: `docker compose run -v $(pwd)/backend/tests/extractors/fixtures/py_sample:/repos/py_sample --rm api uv run python -m codegraph.ingest register --name py_sample --root /repos/py_sample` then `run --repo py_sample` exits 0.
+5. Works end-to-end in compose: `docker compose run -v $(pwd)/backend/tests/extractors/fixtures/py_sample:/repos/py_sample --rm api uv run python -m cartograph.ingest register --name py_sample --root /repos/py_sample` then `run --repo py_sample` exits 0.
 
 ## Out of scope
 

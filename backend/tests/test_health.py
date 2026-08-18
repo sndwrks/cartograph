@@ -1,6 +1,6 @@
 import httpx
 
-from codegraph.api.app import create_app
+from cartograph.api.app import create_app
 
 
 async def test_health() -> None:

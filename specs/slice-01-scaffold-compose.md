@@ -21,10 +21,10 @@ Nothing. This is the first slice.
 3. `.gitignore` — must include `.env`, `__pycache__/`, `.venv/`, `node_modules/`, `web/dist/`, `.pytest_cache/`, `*.egg-info/`.
 4. `.env.example` with every variable documented by comment:
    ```
-   POSTGRES_USER=codegraph
+   POSTGRES_USER=cartograph
    POSTGRES_PASSWORD=change-me
-   POSTGRES_DB=codegraph
-   DATABASE_URL=postgresql+asyncpg://codegraph:change-me@db:5432/codegraph
+   POSTGRES_DB=cartograph
+   DATABASE_URL=postgresql+asyncpg://cartograph:change-me@db:5432/cartograph
    ANTHROPIC_API_KEY=            # tier-3 summaries/labels (slice 13)
    VOYAGE_API_KEY=               # embeddings, voyage-code-3 (slice 13)
    MCP_BEARER_TOKEN=change-me    # static token required by the MCP server (slice 09)
@@ -32,10 +32,10 @@ Nothing. This is the first slice.
 
 ### 2. Backend package
 
-1. `backend/pyproject.toml`: package name `codegraph`, `requires-python = ">=3.14"`, src layout (`backend/src/codegraph/`). Dependencies for this slice: `fastapi`, `uvicorn[standard]`, `pydantic-settings`. Dev group: `pytest`, `pytest-asyncio`, `httpx`.
+1. `backend/pyproject.toml`: package name `cartograph`, `requires-python = ">=3.14"`, src layout (`backend/src/cartograph/`). Dependencies for this slice: `fastapi`, `uvicorn[standard]`, `pydantic-settings`. Dev group: `pytest`, `pytest-asyncio`, `httpx`.
 2. `uv lock` committed as `backend/uv.lock`.
-3. `src/codegraph/config.py`: a `Settings` class (pydantic-settings) reading `DATABASE_URL`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `MCP_BEARER_TOKEN` from the environment, with a module-level `get_settings()` (cached).
-4. `src/codegraph/api/app.py`: FastAPI app factory `create_app()`; router mounted at `/api/v1`; single endpoint `GET /api/v1/health` returning `{"status": "ok"}`.
+3. `src/cartograph/config.py`: a `Settings` class (pydantic-settings) reading `DATABASE_URL`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `MCP_BEARER_TOKEN` from the environment, with a module-level `get_settings()` (cached).
+4. `src/cartograph/api/app.py`: FastAPI app factory `create_app()`; router mounted at `/api/v1`; single endpoint `GET /api/v1/health` returning `{"status": "ok"}`.
 5. `backend/Dockerfile`: based on a Python 3.14 image, installs uv, `uv sync --frozen`, default command runs uvicorn on `0.0.0.0:8000`. One image serves api, mcp, and one-shot jobs (they differ only by command).
 6. Startup command for the api service is a small shell entrypoint that runs `alembic upgrade head || true` then uvicorn. The `|| true` is temporary scaffolding: alembic does not exist until slice 02, and slice 02 removes the `|| true`.
 
@@ -53,7 +53,7 @@ Nothing. This is the first slice.
 | `db` | `pgvector/pgvector:pg18` | **none published** | env from `.env`; named volume `pgdata:/var/lib/postgresql/data`; healthcheck `pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}` interval 5s |
 | `api` | `backend/Dockerfile` | `8000:8000` | `depends_on: db: condition: service_healthy`; env from `.env`; healthcheck curl of `/api/v1/health` |
 | `web` | `web/Dockerfile` | `5173:80` | `depends_on: api` |
-| `mcp` | `backend/Dockerfile` | `8765:8765` | `depends_on: db: condition: service_healthy`; command is a stub for now: `python -m codegraph.mcp_server` where `mcp_server/__main__.py` just serves an HTTP 200 "mcp stub" on 8765 (stdlib `http.server` is fine). Slice 09 replaces it. |
+| `mcp` | `backend/Dockerfile` | `8765:8765` | `depends_on: db: condition: service_healthy`; command is a stub for now: `python -m cartograph.mcp_server` where `mcp_server/__main__.py` just serves an HTTP 200 "mcp stub" on 8765 (stdlib `http.server` is fine). Slice 09 replaces it. |
 
 `docker-compose.dev.yml` (override): mounts `backend/src` into api and mcp with `uvicorn --reload`; replaces the web service with the Vite dev server (`npm run dev -- --host`) publishing 5173, with Vite's proxy config forwarding `/api` to `http://api:8000`.
 
@@ -62,9 +62,9 @@ Nothing. This is the first slice.
 - `LICENSE`, `README.md`, `.gitignore`, `.env.example`
 - `docker-compose.yml`, `docker-compose.dev.yml`
 - `backend/Dockerfile`, `backend/pyproject.toml`, `backend/uv.lock`, `backend/entrypoint.sh`
-- `backend/src/codegraph/{__init__.py,config.py}`
-- `backend/src/codegraph/api/{__init__.py,app.py}`
-- `backend/src/codegraph/mcp_server/{__init__.py,__main__.py}` (stub)
+- `backend/src/cartograph/{__init__.py,config.py}`
+- `backend/src/cartograph/api/{__init__.py,app.py}`
+- `backend/src/cartograph/mcp_server/{__init__.py,__main__.py}` (stub)
 - `backend/tests/test_health.py`
 - `web/` (Vite scaffold), `web/Dockerfile`, `web/nginx.conf`
 

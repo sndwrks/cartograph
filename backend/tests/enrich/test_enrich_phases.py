@@ -1,10 +1,10 @@
 from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
-from codegraph.enrich.runner import ALL_PHASES, run_phases
-from codegraph.ingest.loader import ingest_repo
-from codegraph.models import Community, Edge, EdgeConfidence, EdgeRel, Node, NodeKind
-from codegraph.query import kb as q_kb
+from cartograph.enrich.runner import ALL_PHASES, run_phases
+from cartograph.ingest.loader import ingest_repo
+from cartograph.models import Community, Edge, EdgeConfidence, EdgeRel, Node, NodeKind
+from cartograph.query import kb as q_kb
 
 
 async def node_by_qname(session, repo_id, qname, kind=None):

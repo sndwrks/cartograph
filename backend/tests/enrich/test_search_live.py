@@ -1,8 +1,8 @@
 import pytest
 
-from codegraph.models import EMBED_DIM
-from codegraph.query import kb as q_kb
-from codegraph.query import search as q_search
+from cartograph.models import EMBED_DIM
+from cartograph.query import kb as q_kb
+from cartograph.query import search as q_search
 from fakes import FakeEmbedder
 
 

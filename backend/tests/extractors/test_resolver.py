@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from codegraph.extractors.base import FileExtraction, RefRecord, SymbolRecord
-from codegraph.extractors.python import PythonExtractor
-from codegraph.extractors.resolve import resolve
+from cartograph.extractors.base import FileExtraction, RefRecord, SymbolRecord
+from cartograph.extractors.python import PythonExtractor
+from cartograph.extractors.resolve import resolve
 
 FIXTURES = Path(__file__).parent / "fixtures" / "py_sample"
 

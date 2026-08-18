@@ -36,7 +36,7 @@ Slices 09 (MCP server), 12 (panel), 13 (enrich chaining). Slice 08's message/age
 
 1. `scripts/post-commit` (template, executable) + `scripts/install-hook.sh` that symlinks it into a target repo's `.git/hooks/`. The hook:
    - Collects changed files: `git diff-tree --no-commit-id --name-only -r HEAD`.
-   - Calls `docker compose run --rm api uv run python -m codegraph.ingest run --repo "$CODEGRAPH_REPO" --files <changed...>` (compose project dir via `CODEGRAPH_COMPOSE_DIR` env; both variables documented at the top of the script). Skips silently when compose isn't running (`docker compose ps -q api` empty) — a hook must never block a commit; always `exit 0`, logging failures to `.git/codegraph-hook.log`.
+   - Calls `docker compose run --rm api uv run python -m cartograph.ingest run --repo "$CARTOGRAPH_REPO" --files <changed...>` (compose project dir via `CARTOGRAPH_COMPOSE_DIR` env; both variables documented at the top of the script). Skips silently when compose isn't running (`docker compose ps -q api` empty) — a hook must never block a commit; always `exit 0`, logging failures to `.git/cartograph-hook.log`.
 2. Chaining inside `ingest run` (not the hook): after load+resolve, invoke the metrics job passing `--changed-edges <edges_added + edges_deleted>` so clustering only re-runs past the slice-06 threshold; when `--enrich` is set (hook passes it), run enrich phases `summaries embeddings docs` for the repo (community labels stay put — on-demand only, per spec §10 recommendation). Record phase timings in the run's `stats`.
 3. `trigger` on the run row: hook-invoked runs record `trigger="hook"` (flag `--trigger hook`).
 
@@ -46,8 +46,8 @@ Written for assistants connected to the MCP server; must instruct: call `kb_look
 
 ## Files
 
-- `backend/src/codegraph/mcp_server/tools.py` (+2 tools), `backend/tests/mcp/test_board_tools.py`
-- `backend/src/codegraph/ingest/__main__.py` (+ `--trigger`, `--enrich`, metrics chaining)
+- `backend/src/cartograph/mcp_server/tools.py` (+2 tools), `backend/tests/mcp/test_board_tools.py`
+- `backend/src/cartograph/ingest/__main__.py` (+ `--trigger`, `--enrich`, metrics chaining)
 - `web/src/components/{NodeDetail.tsx (edit),ThreadList.tsx}`
 - `scripts/{post-commit,install-hook.sh}`
 - `CLAUDE.md`, `README.md` (hook setup section)
@@ -56,7 +56,7 @@ Written for assistants connected to the MCP server; must instruct: call `kb_look
 
 1. MCP tests: `post_message` from an unknown agent name creates the agent (visible via `GET /api/v1/agents`) and the message; replying to a reply lands on the thread root; `read_board` filtered by `node_qualified_name` returns the anchored thread; `since` filters; bad node name → structured error with candidates.
 2. Live loop: via a real MCP client, post a message anchored to a fixture symbol → select that symbol in the SPA → the thread appears in the panel's Discussion section; expanding shows the reply.
-3. Hook: in a scratch git repo registered + mounted as a codegraph repo, `install-hook.sh`, commit a change to one file → an `ingest_runs` row with `trigger="hook"` appears, only that file re-ingested; commit a whitespace-only change → run records zero deltas and clustering skipped (threshold gate); with compose stopped, committing still succeeds instantly.
+3. Hook: in a scratch git repo registered + mounted as a cartograph repo, `install-hook.sh`, commit a change to one file → an `ingest_runs` row with `trigger="hook"` appears, only that file re-ingested; commit a whitespace-only change → run records zero deltas and clustering skipped (threshold gate); with compose stopped, committing still succeeds instantly.
 4. `--enrich` chained run touches only changed nodes (fake-client counts, per slice 13).
 5. Full-suite green: `uv run pytest` (backend) and `npm run build` (web).
 

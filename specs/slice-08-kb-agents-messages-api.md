@@ -71,8 +71,8 @@ Read-only; reuses `query/ingest.py` from slice 05.
 
 ## Files
 
-- `backend/src/codegraph/query/{kb.py,agents.py,messages.py}` (+ additions to `ingest.py`)
-- `backend/src/codegraph/api/routers/{kb.py,agents.py,messages.py,ingest.py}` + wiring in `app.py`
+- `backend/src/cartograph/query/{kb.py,agents.py,messages.py}` (+ additions to `ingest.py`)
+- `backend/src/cartograph/api/routers/{kb.py,agents.py,messages.py,ingest.py}` + wiring in `app.py`
 - `backend/tests/api/{test_kb.py,test_agents.py,test_messages.py,test_ingest_runs.py}`
 
 ## Acceptance criteria

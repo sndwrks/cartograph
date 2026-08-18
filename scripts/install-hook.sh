@@ -1,5 +1,5 @@
 #!/bin/sh
-# Symlink the codegraph post-commit hook into a target repository.
+# Symlink the cartograph post-commit hook into a target repository.
 # usage: ./scripts/install-hook.sh /path/to/target-repo
 set -e
 
@@ -16,4 +16,4 @@ esac
 mkdir -p "$HOOKS_DIR"
 ln -sf "$HOOK_SRC" "$HOOKS_DIR/post-commit"
 echo "installed: $HOOKS_DIR/post-commit -> $HOOK_SRC"
-echo "set CODEGRAPH_COMPOSE_DIR and CODEGRAPH_REPO if the defaults don't fit"
+echo "set CARTOGRAPH_COMPOSE_DIR and CARTOGRAPH_REPO if the defaults don't fit"

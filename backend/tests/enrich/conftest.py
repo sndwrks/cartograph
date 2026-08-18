@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from codegraph.api.app import create_app
-from codegraph.db import get_session
-from codegraph.ingest.loader import ingest_repo
-from codegraph.metrics.job import run_metrics
-from codegraph.query import ingest as qi
+from cartograph.api.app import create_app
+from cartograph.db import get_session
+from cartograph.ingest.loader import ingest_repo
+from cartograph.metrics.job import run_metrics
+from cartograph.query import ingest as qi
 from fakes import FakeEmbedder, FakeLLM
 
 FIXTURE = Path(__file__).parents[1] / "extractors" / "fixtures" / "py_sample"

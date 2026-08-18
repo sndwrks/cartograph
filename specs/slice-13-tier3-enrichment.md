@@ -2,7 +2,7 @@
 
 ## Goal
 
-The LLM pass: `python -m codegraph.enrich` writes summaries for symbols, embeds them with Voyage `voyage-code-3`, labels communities, ingests docs/config as graph nodes, and embeds KB entries. With embeddings in place, semantic and hybrid search go live, the KB lookup gains its vector fallback, and node detail gains related KB terms. This is the only slice that spends API money, so caching on content hash is a hard requirement, not an optimization.
+The LLM pass: `python -m cartograph.enrich` writes summaries for symbols, embeds them with Voyage `voyage-code-3`, labels communities, ingests docs/config as graph nodes, and embeds KB entries. With embeddings in place, semantic and hybrid search go live, the KB lookup gains its vector fallback, and node detail gains related KB terms. This is the only slice that spends API money, so caching on content hash is a hard requirement, not an optimization.
 
 ## Depends on
 
@@ -14,9 +14,9 @@ Slices 07 and 08 (search/KB plumbing with declared-but-stubbed semantic paths). 
 
 ## Requirements
 
-### 1. Job CLI — `codegraph/enrich/__main__.py`
+### 1. Job CLI — `cartograph/enrich/__main__.py`
 
-`python -m codegraph.enrich --repo NAME [--phase summaries|embeddings|communities|docs|kb|all] [--limit N]`
+`python -m cartograph.enrich --repo NAME [--phase summaries|embeddings|communities|docs|kb|all] [--limit N]`
 
 Default `all` runs phases in that order. Each phase is independently resumable (idempotent by cache checks). Requires `ANTHROPIC_API_KEY` (summaries, labels, doc linking) and `VOYAGE_API_KEY` (embeddings); fail fast with a clear message if the needed key is missing for the requested phase. Add `anthropic` and `voyageai` to `pyproject.toml`.
 
@@ -58,13 +58,13 @@ Embed KB entries (`term + ": " + definition`) where `embedding IS NULL`; KB crea
 
 ### 8. Ingest integration
 
-`codegraph.ingest run` gains `--enrich` flag chaining the enrich job after load+resolve (used by slice 14's hook). A change to one file must only re-summarize/re-embed that file's nodes — this falls out of the cache rules, but is an explicit acceptance test.
+`cartograph.ingest run` gains `--enrich` flag chaining the enrich job after load+resolve (used by slice 14's hook). A change to one file must only re-summarize/re-embed that file's nodes — this falls out of the cache rules, but is an explicit acceptance test.
 
 ## Files
 
-- `backend/src/codegraph/enrich/{__init__.py,__main__.py,summaries.py,embeddings.py,communities.py,docs.py,kb.py,llm.py,voyage.py}`
-- `backend/src/codegraph/query/{search.py (implement),kb.py (fallback),graph.py (related-kb)}`
-- `backend/src/codegraph/api/routers/graph.py` (related-kb route), `search.py` (un-stub)
+- `backend/src/cartograph/enrich/{__init__.py,__main__.py,summaries.py,embeddings.py,communities.py,docs.py,kb.py,llm.py,voyage.py}`
+- `backend/src/cartograph/query/{search.py (implement),kb.py (fallback),graph.py (related-kb)}`
+- `backend/src/cartograph/api/routers/graph.py` (related-kb route), `search.py` (un-stub)
 - `web/src/components/NodeDetail.tsx` (related-KB section live)
 - `backend/tests/enrich/` — LLM and Voyage clients behind small interfaces (`llm.py`, `voyage.py`) so tests inject fakes; **no test may hit real APIs**
 
@@ -75,7 +75,7 @@ Embed KB entries (`term + ": " + definition`) where `embedding IS NULL`; KB crea
 3. Hybrid search test (fake embeddings crafted so semantic and text rank differently): RRF order correct, `degraded` gone, `mode=semantic` no longer 501.
 4. **PSN regression:** slice-08's exact/alias tests pass unchanged; a term with no exact/alias hit now returns `match: "vector"` results.
 5. `GET /nodes/{id}/related-kb` returns the planted nearest KB entry; the panel section renders it.
-6. Live smoke (manual, real keys, tiny repo): `docker compose run --rm api uv run python -m codegraph.enrich --repo py_sample --limit 5` produces real summaries; document observed cost order-of-magnitude in the run output.
+6. Live smoke (manual, real keys, tiny repo): `docker compose run --rm api uv run python -m cartograph.enrich --repo py_sample --limit 5` produces real summaries; document observed cost order-of-magnitude in the run output.
 
 ## Out of scope
 

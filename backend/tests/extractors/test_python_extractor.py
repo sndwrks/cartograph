@@ -3,13 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from codegraph.extractors import get_extractor_for
-from codegraph.extractors.base import ImportRecord
-from codegraph.extractors.python import PythonExtractor, module_qname_for_path
+from cartograph.extractors import get_extractor_for
+from cartograph.extractors.base import ImportRecord
+from cartograph.extractors.python import PythonExtractor, module_qname_for_path
 
 FIXTURES = Path(__file__).parent / "fixtures" / "py_sample"
 EXTRACTORS_SRC = (
-    Path(__file__).parents[2] / "src" / "codegraph" / "extractors"
+    Path(__file__).parents[2] / "src" / "cartograph" / "extractors"
 )
 
 
@@ -160,7 +160,7 @@ def test_registry():
 
 
 def test_no_db_imports():
-    forbidden = ("sqlalchemy", "codegraph.db", "codegraph.models")
+    forbidden = ("sqlalchemy", "cartograph.db", "cartograph.models")
     for module_file in EXTRACTORS_SRC.glob("*.py"):
         tree = ast.parse(module_file.read_text())
         for node in ast.walk(tree):

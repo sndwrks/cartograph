@@ -1,6 +1,6 @@
-from codegraph.mcp_server import tools
-from codegraph.models import Node, NodeKind
-from codegraph.query import kb as q_kb
+from cartograph.mcp_server import tools
+from cartograph.models import Node, NodeKind
+from cartograph.query import kb as q_kb
 
 
 async def test_search_code_finds_and_degrades(session, seeded):

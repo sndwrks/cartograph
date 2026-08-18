@@ -1,7 +1,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from codegraph.mcp_server.auth import BearerAuthMiddleware
+from cartograph.mcp_server.auth import BearerAuthMiddleware
 
 TOKEN = "test-token"
 

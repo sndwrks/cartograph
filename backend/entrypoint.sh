@@ -9,4 +9,4 @@ fi
 
 uv run alembic upgrade head
 
-exec uv run uvicorn codegraph.api.app:app --host 0.0.0.0 --port 8000
+exec uv run uvicorn cartograph.api.app:app --host 0.0.0.0 --port 8000

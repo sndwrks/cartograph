@@ -1,7 +1,7 @@
-# Working with the CodeGraph MCP server
+# Working with the Cartograph MCP server
 
 This project exposes a persistent knowledge graph of one or more code
-repositories through the `codegraph` MCP server (tools: `search_code`,
+repositories through the `cartograph` MCP server (tools: `search_code`,
 `get_node`, `get_neighbors`, `impact_of`, `kb_lookup`, `post_message`,
 `read_board`). House rules:
 

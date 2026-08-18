@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
-from codegraph.ingest.loader import ingest_repo
-from codegraph.metrics.job import run_metrics
-from codegraph.models import Community, CommunityEdge, Edge, EdgeRel, Node, NodeKind
-from codegraph.query import ingest as qi
+from cartograph.ingest.loader import ingest_repo
+from cartograph.metrics.job import run_metrics
+from cartograph.models import Community, CommunityEdge, Edge, EdgeRel, Node, NodeKind
+from cartograph.query import ingest as qi
 
 FIXTURE = Path(__file__).parents[1] / "extractors" / "fixtures" / "py_sample"
 

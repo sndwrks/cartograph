@@ -3,7 +3,7 @@ import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from codegraph.models import (
+from cartograph.models import (
     EMBED_DIM,
     Agent,
     AgentMessage,

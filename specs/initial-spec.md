@@ -1,4 +1,4 @@
-# CodeGraph — Technical Specification
+# Cartograph — Technical Specification
 
 **Version 0.1 · August 2026**
 
@@ -20,7 +20,7 @@ Compatibility note: Python 3.14 is recent enough that binary wheels occasionally
 
 ### 2.1 Docker Compose topology
 
-Four services on one internal network. **db** runs Postgres 18 with pgvector, no ports published to the host; data persisted in a named volume; healthcheck via `pg_isready`. **api** runs the FastAPI app (uvicorn), depends on db healthy, publishes port 8000 to the host, runs `alembic upgrade head` on startup. **web** serves the built SPA via nginx (or Vite dev server in the dev override file), publishes port 5173/80, proxies `/api` to the api service so the browser never needs direct db or CORS access. **mcp** runs the MCP server over streamable HTTP, publishes its port to the host so Claude Code on the host machine can reach it; it depends on db healthy. Extraction jobs run as one-shot compose commands (`docker compose run api python -m codegraph.ingest ...`) rather than a long-lived worker, since ingestion is batch-oriented. A dev override file mounts source for hot reload. Secrets (db password, Anthropic API key for embedding/summary passes) come from a `.env` file that is gitignored.
+Four services on one internal network. **db** runs Postgres 18 with pgvector, no ports published to the host; data persisted in a named volume; healthcheck via `pg_isready`. **api** runs the FastAPI app (uvicorn), depends on db healthy, publishes port 8000 to the host, runs `alembic upgrade head` on startup. **web** serves the built SPA via nginx (or Vite dev server in the dev override file), publishes port 5173/80, proxies `/api` to the api service so the browser never needs direct db or CORS access. **mcp** runs the MCP server over streamable HTTP, publishes its port to the host so Claude Code on the host machine can reach it; it depends on db healthy. Extraction jobs run as one-shot compose commands (`docker compose run api python -m cartograph.ingest ...`) rather than a long-lived worker, since ingestion is batch-oriented. A dev override file mounts source for hot reload. Secrets (db password, Anthropic API key for embedding/summary passes) come from a `.env` file that is gitignored.
 
 The deliberate consequence of not publishing the db port: all human and machine access goes through the API or MCP layer. If ad-hoc SQL is needed during development, use `docker compose exec db psql`.
 

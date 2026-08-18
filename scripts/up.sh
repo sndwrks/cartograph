@@ -1,5 +1,5 @@
 #!/bin/sh
-# Bring up the CodeGraph stack.
+# Bring up the Cartograph stack.
 #
 #   ./scripts/up.sh        dev mode (default): source mounts + hot reload,
 #                          Vite dev server, Postgres published on 127.0.0.1:5433

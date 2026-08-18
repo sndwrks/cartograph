@@ -2,8 +2,8 @@ import datetime
 
 from sqlalchemy import func, select
 
-from codegraph.mcp_server import tools
-from codegraph.models import Agent, Node, NodeKind
+from cartograph.mcp_server import tools
+from cartograph.models import Agent, Node, NodeKind
 
 
 async def test_post_message_self_registers(session, seeded):

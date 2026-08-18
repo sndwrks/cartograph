@@ -1,4 +1,4 @@
-# CodeGraph — Implementation Slices
+# Cartograph — Implementation Slices
 
 This folder decomposes [`initial-spec.md`](initial-spec.md) into 14 implementation slices, each sized for a single focused implementation session. Implement them in numeric order unless the dependency notes say otherwise; every slice's **Acceptance criteria** must pass before starting the next.
 
@@ -43,19 +43,19 @@ code-graph/
 ├── scripts/                   # post-commit hook template (slice 14)
 ├── backend/
 │   ├── Dockerfile
-│   ├── pyproject.toml         # uv-managed, Python 3.14, package `codegraph`
+│   ├── pyproject.toml         # uv-managed, Python 3.14, package `cartograph`
 │   ├── uv.lock
 │   ├── alembic.ini
 │   ├── alembic/
-│   ├── src/codegraph/
+│   ├── src/cartograph/
 │   │   ├── config.py          # settings from env (pydantic-settings)
 │   │   ├── models.py          # SQLAlchemy 2.0 models (slice 02)
 │   │   ├── db.py              # async engine / session factory
 │   │   ├── query/             # shared query layer — the ONLY place SQL lives
 │   │   ├── extractors/        # base.py, resolve.py, python.py, typescript.py
-│   │   ├── ingest/            # CLI: python -m codegraph.ingest
-│   │   ├── metrics/           # CLI: python -m codegraph.metrics
-│   │   ├── enrich/            # CLI: python -m codegraph.enrich (tier 3)
+│   │   ├── ingest/            # CLI: python -m cartograph.ingest
+│   │   ├── metrics/           # CLI: python -m cartograph.metrics
+│   │   ├── enrich/            # CLI: python -m cartograph.enrich (tier 3)
 │   │   ├── api/               # FastAPI app + routers
 │   │   └── mcp_server/        # MCP entrypoint, imports query/
 │   └── tests/
@@ -68,13 +68,13 @@ code-graph/
 
 - **Python 3.14, uv-managed.** All backend deps in one `backend/pyproject.toml`; pin via `uv.lock`. Run tools with `uv run <cmd>`.
 - **Async everywhere in the backend.** SQLAlchemy 2.0 async (`asyncpg` driver), fully typed declarative models, FastAPI async endpoints.
-- **SQL lives only in `codegraph/query/`.** API routers and MCP tools are thin wrappers over the same query functions. If a slice needs a new query, it adds a function there.
+- **SQL lives only in `cartograph/query/`.** API routers and MCP tools are thin wrappers over the same query functions. If a slice needs a new query, it adds a function there.
 - **Confidence is sacred.** Every edge carries `resolved` | `llm_inferred` | `name_match`, and every API/MCP response that returns edges includes the tag. Trust ordering: `resolved` > `llm_inferred` > `name_match`.
 - **`EMBED_DIM = 1024`** (Voyage `voyage-code-3`). Defined once in `models.py`; never hardcode 1024 elsewhere.
-- **The db service never publishes a port.** All access goes through the API or MCP. Ad-hoc SQL: `docker compose exec db psql -U codegraph`.
+- **The db service never publishes a port.** All access goes through the API or MCP. Ad-hoc SQL: `docker compose exec db psql -U cartograph`.
 - **Secrets** come from `.env` (gitignored). `.env.example` documents every variable; never commit real values.
 - **Tests** use pytest (+ pytest-asyncio). DB-touching tests run against the compose `db` service via a test database, or a throwaway pgvector container; extractor tests (slices 03/04) are pure and need no DB.
-- **Batch jobs are CLI modules**, not long-lived workers: `docker compose run api uv run python -m codegraph.<job> ...`.
+- **Batch jobs are CLI modules**, not long-lived workers: `docker compose run api uv run python -m cartograph.<job> ...`.
 
 ## Milestone checkpoints
 

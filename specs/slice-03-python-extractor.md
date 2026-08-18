@@ -16,7 +16,7 @@ Slice 01 (package skeleton). No database — everything here is pure functions o
 
 ### 1. Shared contract — `extractors/base.py`
 
-Frozen dataclasses, not ORM objects. This layer must not import `models.py`, sqlalchemy, or `codegraph.db` — kind/rel/confidence fields are plain strings whose values match the `NodeKind`/`EdgeRel`/`EdgeConfidence` enum values by convention (slice 05's loader maps them):
+Frozen dataclasses, not ORM objects. This layer must not import `models.py`, sqlalchemy, or `cartograph.db` — kind/rel/confidence fields are plain strings whose values match the `NodeKind`/`EdgeRel`/`EdgeConfidence` enum values by convention (slice 05's loader maps them):
 
 ```python
 @dataclass(frozen=True)
@@ -107,7 +107,7 @@ Rules (spec §3 tier 1, intentionally naive):
 
 ## Files
 
-- `backend/src/codegraph/extractors/{__init__.py,base.py,resolve.py,python.py}`
+- `backend/src/cartograph/extractors/{__init__.py,base.py,resolve.py,python.py}`
 - `backend/tests/extractors/fixtures/py_sample/` — a small fake package (see below)
 - `backend/tests/extractors/test_python_extractor.py`, `test_resolver.py`
 
@@ -118,7 +118,7 @@ Rules (spec §3 tier 1, intentionally naive):
 1. A package `py_sample/` with `pkg/__init__.py`, `pkg/models.py` (two classes, one inheriting the other), `pkg/services.py` (class with methods calling across files via `from pkg.models import ...`), `pkg/util.py` (module-level functions), `pkg/cli.py` (relative import `from .services import ...`, aliased import, `import pkg.util as u` + `u.helper()` call).
 2. Assertions that: qualified names and line spans are exact; the cross-file call via a single import resolves `resolved`; a name defined in two modules and called without an import yields `name_match` edges to both; inheritance produces an `inherits` edge; relative and aliased imports resolve; an unresolvable external call (`requests.get`) produces no edge; a file with a deliberate syntax error still yields its parseable symbols.
 3. `content_hash` is stable across runs and changes when the symbol's source changes.
-4. No file in `extractors/` imports sqlalchemy or `codegraph.db`.
+4. No file in `extractors/` imports sqlalchemy or `cartograph.db`.
 
 ## Out of scope
 

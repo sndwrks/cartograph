@@ -8,11 +8,11 @@ counter that nothing downstream read.
 import pytest
 from sqlalchemy import select
 
-from codegraph.config import get_settings
-from codegraph.enrich import embeddings
-from codegraph.enrich.runner import failed_phases, run_phases
-from codegraph.enrich.voyage import batch_spans, estimate_tokens
-from codegraph.models import Node
+from cartograph.config import get_settings
+from cartograph.enrich import embeddings
+from cartograph.enrich.runner import failed_phases, run_phases
+from cartograph.enrich.voyage import batch_spans, estimate_tokens
+from cartograph.models import Node
 from fakes import FakeEmbedder
 
 

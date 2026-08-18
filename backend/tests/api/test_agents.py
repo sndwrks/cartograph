@@ -1,4 +1,4 @@
-from codegraph.query.agents import get_or_create_agent
+from cartograph.query.agents import get_or_create_agent
 
 
 async def test_create_and_duplicate(client):

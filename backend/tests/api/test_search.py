@@ -1,4 +1,4 @@
-from codegraph.query.search import rrf_merge
+from cartograph.query.search import rrf_merge
 
 
 async def test_text_search_fuzzy(client, seeded):

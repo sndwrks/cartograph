@@ -5,9 +5,9 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
-from codegraph.ingest.loader import ingest_repo
-from codegraph.models import Edge, IngestRun, Node, NodeKind
-from codegraph.query import ingest as q
+from cartograph.ingest.loader import ingest_repo
+from cartograph.models import Edge, IngestRun, Node, NodeKind
+from cartograph.query import ingest as q
 
 FIXTURE = Path(__file__).parents[1] / "extractors" / "fixtures" / "py_sample"
 

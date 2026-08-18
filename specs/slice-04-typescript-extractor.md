@@ -56,7 +56,7 @@ The slice-03 resolver must handle TS without language branching. Two things it m
 
 ## Files
 
-- `backend/src/codegraph/extractors/typescript.py` (+ registry entry in `base.py`)
+- `backend/src/cartograph/extractors/typescript.py` (+ registry entry in `base.py`)
 - `backend/tests/extractors/fixtures/ts_sample/` — small fake app (see below), including a root `tsconfig.json` with a `@/*` path alias
 - `backend/tests/extractors/test_typescript_extractor.py`
 

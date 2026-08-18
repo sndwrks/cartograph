@@ -3,7 +3,7 @@
 import hashlib
 import re
 
-from codegraph.models import EMBED_DIM
+from cartograph.models import EMBED_DIM
 
 
 class FakeLLM:

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Symlink the codegraph agent-board skill into a Claude skills directory.
+# Symlink the cartograph agent-board skill into a Claude skills directory.
 # usage: ./scripts/install-skill.sh [skills-dir]        (default: ~/.claude/skills)
 set -e
 

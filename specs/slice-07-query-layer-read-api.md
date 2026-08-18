@@ -2,7 +2,7 @@
 
 ## Goal
 
-The shared query layer (`codegraph/query/graph.py`, `search.py`) exists with typed functions for every graph read, and FastAPI routers expose them under `/api/v1` in exactly the shapes the SPA will consume. This layer is the single place SQL lives — slice 09's MCP tools call these same functions.
+The shared query layer (`cartograph/query/graph.py`, `search.py`) exists with typed functions for every graph read, and FastAPI routers expose them under `/api/v1` in exactly the shapes the SPA will consume. This layer is the single place SQL lives — slice 09's MCP tools call these same functions.
 
 ## Depends on
 
@@ -28,7 +28,7 @@ CommunityEdgeOut: src_community_id, dst_community_id, weight
 
 `confidence` is always serialized as its string value — never omitted.
 
-### 2. Query functions — `codegraph/query/graph.py`
+### 2. Query functions — `cartograph/query/graph.py`
 
 All async, all taking an `AsyncSession`, all repo-scoped where applicable:
 
@@ -39,7 +39,7 @@ All async, all taking an `AsyncSession`, all repo-scoped where applicable:
 5. `impact(node_id, direction="upstream", max_depth=5, limit=500)` → recursive CTE. `upstream`: follow edges arriving at the node backwards (who calls/imports/references me, transitively — the blast radius). `downstream`: what the node reaches. Returns a depth-annotated tree: `[{node: NodeOut, depth: int, via: EdgeOut}]`, deduped shortest-depth-first, capped at `limit`.
 6. `god_nodes(repo_name, limit=20, kind=None, community_id=None)` → nodes ordered pagerank DESC, `degree_in + degree_out` DESC as tiebreak, optional kind and community filters. Excludes `file` nodes.
 
-### 3. Search — `codegraph/query/search.py`
+### 3. Search — `cartograph/query/search.py`
 
 1. `search_text(repo_name|None, q, kinds=None, limit=20)` → trigram: `GREATEST(similarity(name, :q), similarity(qualified_name, :q))` as score, `WHERE name % :q OR qualified_name % :q`, ordered by score. Returns `[{node: NodeOut, score: float, source: "text"}]`.
 2. `search_semantic(...)` and `search_hybrid(...)`: **define the signatures and the RRF merge now; implement semantic as raising `NotImplementedError` until slice 13.** The RRF function is pure and implemented+tested in this slice: given two ranked lists of node ids, score each id `Σ 1/(60 + rank_i)` and merge descending.
@@ -66,8 +66,8 @@ Semantics: `mode` defaults to `hybrid`; until slice 13, `hybrid` **degrades to t
 
 ## Files
 
-- `backend/src/codegraph/query/{graph.py,search.py}`
-- `backend/src/codegraph/api/{schemas.py}`, `backend/src/codegraph/api/routers/{__init__.py,graph.py,search.py}`
+- `backend/src/cartograph/query/{graph.py,search.py}`
+- `backend/src/cartograph/api/{schemas.py}`, `backend/src/cartograph/api/routers/{__init__.py,graph.py,search.py}`
 - `backend/tests/api/{conftest.py,test_graph_endpoints.py,test_search.py}` — conftest seeds a small deterministic graph (2 communities, ~12 nodes, edges of all three confidences) directly through the models, then runs endpoint tests with httpx `ASGITransport`
 
 ## Acceptance criteria

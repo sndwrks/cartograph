@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from codegraph.extractors import get_extractor_for
-from codegraph.extractors.base import ImportRecord
-from codegraph.extractors.resolve import resolve
-from codegraph.extractors.typescript import (
+from cartograph.extractors import get_extractor_for
+from cartograph.extractors.base import ImportRecord
+from cartograph.extractors.resolve import resolve
+from cartograph.extractors.typescript import (
     TypeScriptExtractor,
     aliases_from_tsconfig,
     module_qname_for_path,

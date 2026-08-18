@@ -20,4 +20,4 @@ COPY alembic ./alembic
 COPY entrypoint.sh ./entrypoint.sh
 RUN uv sync --frozen && chmod +x entrypoint.sh
 
-CMD ["uv", "run", "uvicorn", "codegraph.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "cartograph.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

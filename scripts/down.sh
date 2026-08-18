@@ -1,5 +1,5 @@
 #!/bin/sh
-# Tear down the CodeGraph stack.
+# Tear down the Cartograph stack.
 #
 #   ./scripts/down.sh          stop and remove containers (data volume kept)
 #   ./scripts/down.sh --wipe   also remove the pgdata volume — DESTROYS the graph

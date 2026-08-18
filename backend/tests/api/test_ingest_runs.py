@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from codegraph.ingest.loader import ingest_repo
-from codegraph.query import ingest as qi
+from cartograph.ingest.loader import ingest_repo
+from cartograph.query import ingest as qi
 
 FIXTURE = Path(__file__).parents[1] / "extractors" / "fixtures" / "py_sample"
 

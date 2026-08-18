@@ -2,7 +2,7 @@
 
 ## Goal
 
-A batch job `python -m codegraph.metrics --repo NAME` computes in/out degree, PageRank, Leiden communities, and aggregated inter-community edges, storing everything on the rows the UI reads. After this, the graph has structure: communities exist, god nodes are rankable, and nothing at request time ever runs graph algorithms.
+A batch job `python -m cartograph.metrics --repo NAME` computes in/out degree, PageRank, Leiden communities, and aggregated inter-community edges, storing everything on the rows the UI reads. After this, the graph has structure: communities exist, god nodes are rankable, and nothing at request time ever runs graph algorithms.
 
 ## Depends on
 
@@ -16,7 +16,7 @@ Slice 05 (a populated graph to compute over).
 
 ### 1. Job CLI
 
-`python -m codegraph.metrics --repo NAME [--force-recluster] [--changed-edges N]`
+`python -m cartograph.metrics --repo NAME [--force-recluster] [--changed-edges N]`
 
 - Loads the repo's symbol graph, computes metrics, optionally re-clusters, writes results, exits 0/1.
 - `--changed-edges N` is how callers (slice 14's incremental path) report how many edges the preceding ingest added+deleted; clustering is skipped when `N` is below the threshold (see §4 below). A full run (`--force-recluster` or no `--changed-edges` given) always clusters.
@@ -46,21 +46,21 @@ Add `python-igraph` to `pyproject.toml`.
 
 ### 7. Query layer additions
 
-`codegraph/query/metrics.py`: load-graph query (nodes+edges for a repo), bulk metric writeback, community replace + carry-over, community-edge aggregation. The job module contains algorithm code only, no SQL.
+`cartograph/query/metrics.py`: load-graph query (nodes+edges for a repo), bulk metric writeback, community replace + carry-over, community-edge aggregation. The job module contains algorithm code only, no SQL.
 
 ## Files
 
-- `backend/src/codegraph/metrics/{__init__.py,__main__.py,job.py}`
-- `backend/src/codegraph/query/metrics.py`
+- `backend/src/cartograph/metrics/{__init__.py,__main__.py,job.py}`
+- `backend/src/cartograph/query/metrics.py`
 - `backend/tests/metrics/test_metrics_job.py`
 
 ## Acceptance criteria
 
-1. Ingest `py_sample` (slice 05), run `python -m codegraph.metrics --repo py_sample`. Assert: every non-file symbol node has `pagerank > 0`; degrees match a hand-counted fixture symbol (pick one with known in/out edges, `contains` excluded); at least one community exists; every symbol node has a `community_id`; `communities.node_count` sums to the symbol-node count; `community_edges.weight` values match hand-counted cross-community edges.
+1. Ingest `py_sample` (slice 05), run `python -m cartograph.metrics --repo py_sample`. Assert: every non-file symbol node has `pagerank > 0`; degrees match a hand-counted fixture symbol (pick one with known in/out edges, `contains` excluded); at least one community exists; every symbol node has a `community_id`; `communities.node_count` sums to the symbol-node count; `community_edges.weight` values match hand-counted cross-community edges.
 2. Re-run the job unchanged → identical community memberships (same partition; ids may differ but member sets match) and pagerank stable within float tolerance.
 3. Set a label on a community, re-run with `--force-recluster` → the label survives via carry-over (fixture is small enough that partitions repeat).
 4. Run with `--changed-edges 3` (below threshold) after a label is set → metrics update, communities untouched (same ids).
-5. Job runs in compose: `docker compose run --rm api uv run python -m codegraph.metrics --repo py_sample` exits 0.
+5. Job runs in compose: `docker compose run --rm api uv run python -m cartograph.metrics --repo py_sample` exits 0.
 
 ## Out of scope
 

@@ -6,8 +6,8 @@ The `seeded` graph fixture lives in tests/conftest.py (shared with tests/mcp).
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from codegraph.api.app import create_app
-from codegraph.db import get_session
+from cartograph.api.app import create_app
+from cartograph.db import get_session
 
 @pytest.fixture
 async def client(session):

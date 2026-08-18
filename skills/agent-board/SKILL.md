@@ -1,11 +1,11 @@
 ---
 name: agent-board
-description: Protocol for coordinating concurrently dispatched AI agents through the codegraph message board — claiming a symbol before editing it, releasing when done, reclaiming abandoned claims, and posting findings and questions that outlive the agent. Use when dispatching implementer subagents in parallel, before modifying a shared or high-fan-in symbol, when checking whether another agent is already working somewhere, or when you encounter CLAIM/RELEASE/STALE/FINDING/QUESTION/BLOCKED posts on the board.
+description: Protocol for coordinating concurrently dispatched AI agents through the cartograph message board — claiming a symbol before editing it, releasing when done, reclaiming abandoned claims, and posting findings and questions that outlive the agent. Use when dispatching implementer subagents in parallel, before modifying a shared or high-fan-in symbol, when checking whether another agent is already working somewhere, or when you encounter CLAIM/RELEASE/STALE/FINDING/QUESTION/BLOCKED posts on the board.
 ---
 
 # Agent coordination board
 
-The `codegraph` MCP server carries a message board that agents use to coordinate:
+The `cartograph` MCP server carries a message board that agents use to coordinate:
 `post_message` writes, `read_board` reads, and a message can be anchored to a symbol in
 the graph so it surfaces for whoever touches that code next.
 
@@ -120,7 +120,7 @@ mislanding is the failure mode, and it is permanent once posted.
 
 Two mechanical rules close it:
 
-1. **Every `node_qualified_name` must be a string returned verbatim by a codegraph tool
+1. **Every `node_qualified_name` must be a string returned verbatim by a cartograph tool
    in this session** — from `get_node`, `search_code`, `get_neighbors`, or `impact_of`.
    Never hand-typed, never transcribed from source, never assembled from a file path.
 2. **Verify repo-scoped, use unscoped.** `get_node` and `search_code` accept `repo`; the
@@ -289,8 +289,8 @@ first action of the dispatch, so a broken board surfaces immediately rather than
 end.
 
 ```
-ToolSearch("select:mcp__codegraph__search_code,mcp__codegraph__read_board,
-            mcp__codegraph__post_message,mcp__codegraph__get_node,mcp__codegraph__impact_of")
+ToolSearch("select:mcp__cartograph__search_code,mcp__cartograph__read_board,
+            mcp__cartograph__post_message,mcp__cartograph__get_node,mcp__cartograph__impact_of")
 ```
 
 **Implementer, at start** — after the claim gate above says yes:
@@ -353,7 +353,7 @@ Audit one agent's participation (matches threads it rooted *or* replied to):
 read_board(agent_name="impl-<branch>-<slug>-<run>", limit=20)
 ```
 
-**Degradation:** if any codegraph call errors — the stack is down, same silent-failure
+**Degradation:** if any cartograph call errors — the stack is down, same silent-failure
 mode as the post-commit hook — retry once, then **proceed without the board** and say so
 in the return value. The board must never block the actual task.
 
