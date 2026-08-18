@@ -50,8 +50,10 @@ async def related_kb(
     node_id: int,
     session: SessionDep,
     limit: Annotated[int, Query(ge=1, le=20)] = 5,
+    type: Annotated[list[str] | None, Query()] = None,
 ) -> dict:
-    return {"terms": _found(await q.related_kb(session, node_id, limit), "node")}
+    terms = await q.related_kb(session, node_id, limit, tuple(type) if type else None)
+    return {"terms": _found(terms, "node")}
 
 
 @router.get("/nodes/{node_id}/ego")

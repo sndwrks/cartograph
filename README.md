@@ -196,6 +196,62 @@ EMBED_MIN_INTERVAL_S=21             # throttle between requests (0 = off)
 EMBED_MAX_TOKENS_PER_REQUEST=8000   # default 100000
 ```
 
+## The knowledge base
+
+Cartograph hosts a typed knowledge base alongside the graph: `glossary` terms,
+`specification`s, `decision`s (ADRs), `convention`s and `runbook`s. Entry types
+are defined in code under `backend/src/cartograph/kb/types/` — adding one is a
+module plus a registry line, never a migration.
+
+Agents reach it through three MCP tools. `kb_lookup` resolves a term (exact,
+then alias, then vector — the PSN case is deterministic and always will be),
+`kb_get` reads one entry in full, and `kb_propose` queues an entry for review.
+**Agents can propose but never publish.** That is not a permission check: the
+MCP server simply has no publish tool, while the REST API — which is
+unauthenticated and reachable only from the host — is the human surface. Review
+a proposal over REST:
+
+```sh
+curl -s "http://localhost:8000/api/v1/kb?status=proposed"
+curl -s -X POST http://localhost:8000/api/v1/kb/42/publish -d '{}' \
+     -H 'Content-Type: application/json'
+curl -s -X POST http://localhost:8000/api/v1/kb/42/reject \
+     -H 'Content-Type: application/json' -d '{"reason": "not a project term"}'
+```
+
+A rejection is kept forever with its reason, and re-proposing that slug returns
+it — the only channel by which your judgment reaches a future session.
+
+### Exporting to Markdown
+
+`python -m cartograph.kb.export` renders published entries into files a repo can
+read with Cartograph switched off: all glossary terms into a root `CONTEXT.md`,
+each decision into `docs/adr/NNNN-slug.md`, and one file each for
+specifications, conventions and runbooks.
+
+```sh
+docker compose run --rm api uv run python -m cartograph.kb.export --repo myrepo
+```
+
+`--out` defaults to the repository's registered `root_path`, so the repo must be
+mounted the same way `ingest register --root` needs it. `--dry-run` reports the
+plan without writing.
+
+**The export is one-way.** Postgres is the source of truth and these files are a
+copy — editing one changes nothing, and the next export does not read it back.
+So the exporter refuses rather than overwrites: it records what it wrote in
+`.cartograph-manifest.json`, and any target that is hand-authored, or that
+changed since it last wrote it, is skipped and reported as a conflict with exit
+code 3. Pass `--force` when you genuinely mean to replace it. Re-running with no
+database change produces byte-identical files, so the output is safe to commit.
+
+| code | meaning |
+| ---- | ------- |
+| 0 | clean |
+| 1 | the job blew up (traceback printed) |
+| 2 | unknown repository, or `--out` is not a directory |
+| 3 | finished, but skipped conflicts or wrote off entries — **re-run to retry** |
+
 ### Keeping the graph fresh with a git hook
 
 Install the post-commit hook into any registered repository:

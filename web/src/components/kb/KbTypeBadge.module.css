@@ -1,0 +1,33 @@
+.badge {
+  border-radius: var(--radius);
+  color: var(--graph-bg);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  padding: var(--space-px) var(--space-2);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge[data-type="glossary"] {
+  background: var(--kb-type-glossary);
+}
+
+.badge[data-type="specification"] {
+  background: var(--kb-type-specification);
+}
+
+.badge[data-type="decision"] {
+  background: var(--kb-type-decision);
+}
+
+.badge[data-type="convention"] {
+  background: var(--kb-type-convention);
+}
+
+.badge[data-type="runbook"] {
+  background: var(--kb-type-runbook);
+}
+
+.badge[data-type="unknown"] {
+  background: var(--kb-type-unknown);
+}

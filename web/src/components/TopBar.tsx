@@ -41,6 +41,13 @@ export default function TopBar() {
         <NavLink to="/graph" className={styles.tabLink}>
           {() => <PageTab label="graph" active={graphActive} />}
         </NavLink>
+        {/* Unlike the graph section above, /kb's sub-pages (/kb/review,
+            /kb/new, /kb/:id/edit) are real CHILDREN of /kb, so a non-`end`
+            NavLink matches them all and isActive can be used directly. Don't
+            hand-union this one. */}
+        <NavLink to="/kb" className={styles.tabLink}>
+          {({ isActive }) => <PageTab label="kb" active={isActive} />}
+        </NavLink>
         <NavLink to="/board" className={styles.tabLink}>
           {({ isActive }) => <PageTab label="board" active={isActive} />}
         </NavLink>

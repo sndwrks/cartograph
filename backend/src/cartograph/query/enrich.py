@@ -241,7 +241,13 @@ async def kb_entries_needing_embedding(
 ) -> list[KnowledgeEntry]:
     stmt = (
         select(KnowledgeEntry)
-        .where(KnowledgeEntry.embedding.is_(None))
+        .where(
+            KnowledgeEntry.embedding.is_(None),
+            # Proposals ARE embedded — it costs nothing at KB scale and makes
+            # publishing instant instead of "wait for the next enrich run".
+            # Rejections never resurface, so embedding them is dead spend.
+            KnowledgeEntry.status != "rejected",
+        )
         .order_by(KnowledgeEntry.id)
     )
     if limit is not None:

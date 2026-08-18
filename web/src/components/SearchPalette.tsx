@@ -5,6 +5,7 @@ import { VisuallyHidden } from "radix-ui";
 
 import { searchCode } from "../api/client";
 import type { NodeKind } from "../api/types";
+import { useDebounced } from "../hooks/useDebounced";
 import { useAppStore } from "../store";
 import { cx, Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui";
 import KindBadge from "./KindBadge";
@@ -18,15 +19,6 @@ const FILTERABLE_KINDS: NodeKind[] = [
   "doc",
   "config",
 ];
-
-function useDebounced(value: string, delayMs: number): string {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(timer);
-  }, [value, delayMs]);
-  return debounced;
-}
 
 export default function SearchPalette() {
   const [input, setInput] = useState("");

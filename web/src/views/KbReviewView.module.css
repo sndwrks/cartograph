@@ -1,0 +1,36 @@
+.review {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  background: var(--color-surface);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border);
+  background: var(--color-surface-raised);
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.body {
+  overflow: auto;
+  min-height: 0;
+  padding: var(--space-4);
+  max-width: var(--content-max);
+}
+
+.notice {
+  margin: 0 0 var(--space-3);
+  color: var(--color-caution);
+  font-size: var(--text-xs);
+}

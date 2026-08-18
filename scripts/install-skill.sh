@@ -1,17 +1,28 @@
 #!/bin/sh
-# Symlink the cartograph agent-board skill into a Claude skills directory.
+# Symlink every cartograph skill into a Claude skills directory.
 # usage: ./scripts/install-skill.sh [skills-dir]        (default: ~/.claude/skills)
 set -e
 
 SKILLS_DIR="${1:-$HOME/.claude/skills}"
-SKILL_SRC="$(cd "$(dirname "$0")/../skills/agent-board" && pwd)"
+SRC_ROOT="$(cd "$(dirname "$0")/../skills" && pwd)"
 
-[ -f "$SKILL_SRC/SKILL.md" ] || {
-    echo "skill not found: $SKILL_SRC/SKILL.md" >&2
+mkdir -p "$SKILLS_DIR"
+
+installed=0
+for skill in "$SRC_ROOT"/*/; do
+    name="$(basename "$skill")"
+    [ -f "$skill/SKILL.md" ] || {
+        echo "skipping $name: no SKILL.md" >&2
+        continue
+    }
+    ln -sfn "${skill%/}" "$SKILLS_DIR/$name"
+    echo "installed: $SKILLS_DIR/$name -> ${skill%/}"
+    installed=$((installed + 1))
+done
+
+[ "$installed" -gt 0 ] || {
+    echo "no skills found under $SRC_ROOT" >&2
     exit 1
 }
 
-mkdir -p "$SKILLS_DIR"
-ln -sfn "$SKILL_SRC" "$SKILLS_DIR/agent-board"
-echo "installed: $SKILLS_DIR/agent-board -> $SKILL_SRC"
-echo "restart or start a new session for the skill to be listed"
+echo "restart or start a new session for the skills to be listed"

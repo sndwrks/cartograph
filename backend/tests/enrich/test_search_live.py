@@ -83,7 +83,7 @@ async def test_kb_vector_fallback(session):
     embedder = FakeEmbedder(overrides={"positage network": unit_vector(0)})
     result = await q_kb.lookup(session, "positage network", embedder=embedder)
     assert result["match"] == "vector"
-    assert result["results"][0].term == "PSN"
+    assert result["results"][0].title == "PSN"
 
     # determinism guarantee: exact match never consults the embedder
     exact = await q_kb.lookup(session, "psn", embedder=embedder)
@@ -108,3 +108,67 @@ async def test_related_kb_endpoint(session, client, embedded_seeded):
     bare = await client.get(f"/api/v1/nodes/{embedded_seeded.extra.id}/related-kb")
     assert bare.status_code == 200
     assert bare.json()["terms"] == []
+
+
+async def test_related_kb_returns_typed_and_legacy_fields(
+    session, client, embedded_seeded
+):
+    psn = await q_kb.create_entry(session, "PSN", "PositageNet", category="acronym")
+    psn.embedding = unit_vector(0)
+    await session.commit()
+
+    response = await client.get(f"/api/v1/nodes/{embedded_seeded.save.id}/related-kb")
+    term = response.json()["terms"][0]
+    assert term["type"] == "glossary"
+    assert term["slug"] == "psn"
+    assert term["title"] == term["term"] == "PSN"
+    assert term["body"] == term["definition"] == "PositageNet"
+    assert term["category"] == "acronym"
+
+
+async def test_related_kb_excludes_proposed(session, client, embedded_seeded):
+    """The read surface everyone forgets: an unreviewed proposal must never
+    surface in the graph side panel, where a human reads it as established."""
+    proposed = await q_kb.create_entry(
+        session, "PSN", "PositageNet", status="proposed"
+    )
+    proposed.embedding = unit_vector(0)
+    await session.commit()
+
+    response = await client.get(f"/api/v1/nodes/{embedded_seeded.save.id}/related-kb")
+    assert response.json()["terms"] == []
+
+
+async def test_related_kb_scoped_to_node_repository(session, client, embedded_seeded):
+    from cartograph.query import ingest as q_ingest
+
+    other_repo = await q_ingest.upsert_repository(session, "elsewhere", "/repos/x")
+    await session.flush()
+    foreign = await q_kb.create_entry(
+        session, "PSN", "PositageNet", repository_id=other_repo.id
+    )
+    mine = await q_kb.create_entry(
+        session, "DDD", "domain driven design", repository_id=embedded_seeded.repo.id
+    )
+    foreign.embedding = unit_vector(0)
+    mine.embedding = unit_vector(0)
+    await session.commit()
+
+    response = await client.get(f"/api/v1/nodes/{embedded_seeded.save.id}/related-kb")
+    assert [t["title"] for t in response.json()["terms"]] == ["DDD"]
+
+
+async def test_related_kb_type_filter(session, client, embedded_seeded):
+    psn = await q_kb.create_entry(session, "PSN", "PositageNet")
+    book = await q_kb.create_entry(
+        session, "Rotate key", "Steps.", type="runbook"
+    )
+    psn.embedding = unit_vector(0)
+    book.embedding = unit_vector(0)
+    await session.commit()
+
+    response = await client.get(
+        f"/api/v1/nodes/{embedded_seeded.save.id}/related-kb",
+        params={"type": "runbook"},
+    )
+    assert [t["type"] for t in response.json()["terms"]] == ["runbook"]

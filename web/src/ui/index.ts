@@ -8,6 +8,7 @@ export * from "./uiStrings";
 export * from "./Button";
 export * from "./Badge";
 export * from "./Input";
+export * from "./Textarea";
 export * from "./PageTabs";
 export * from "./Select";
 export * from "./Tooltip";

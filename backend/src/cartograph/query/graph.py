@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, cast, func, literal, null, select
+from sqlalchemy import BigInteger, cast, func, literal, null, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cartograph.api.schemas import (
@@ -295,9 +295,17 @@ async def impact(
 
 
 async def related_kb(
-    session: AsyncSession, node_id: int, limit: int = 5
+    session: AsyncSession,
+    node_id: int,
+    limit: int = 5,
+    types: tuple[str, ...] | None = None,
 ) -> list[dict] | None:
-    """KB entries nearest to the node's embedding; [] until enrichment ran."""
+    """KB entries nearest to the node's embedding; [] until enrichment ran.
+
+    This is the read surface that is easy to forget: without the `published`
+    filter an unreviewed proposal would surface in the graph side panel, which
+    is the one place a human would read it as established fact.
+    """
     from cartograph.models import KnowledgeEntry  # local: avoids widening imports
 
     node = await session.get(Node, node_id)
@@ -306,18 +314,34 @@ async def related_kb(
     if node.embedding is None:
         return []
     distance = KnowledgeEntry.embedding.cosine_distance(node.embedding)
-    rows = (
-        await session.execute(
-            select(KnowledgeEntry, (1 - distance).label("score"))
-            .where(KnowledgeEntry.embedding.is_not(None))
-            .order_by(distance)
-            .limit(limit)
+    stmt = (
+        select(KnowledgeEntry, (1 - distance).label("score"))
+        .where(
+            KnowledgeEntry.embedding.is_not(None),
+            KnowledgeEntry.status == "published",
+            # global entries, plus this node's own repository — derived from
+            # the Node already loaded, so no extra query
+            or_(
+                KnowledgeEntry.repository_id.is_(None),
+                KnowledgeEntry.repository_id == node.repository_id,
+            ),
         )
-    ).all()
+        .order_by(distance)
+        .limit(limit)
+    )
+    if types:
+        stmt = stmt.where(KnowledgeEntry.type.in_(types))
+    rows = (await session.execute(stmt)).all()
     return [
         {
-            "term": entry.term,
-            "definition": entry.definition,
+            "id": entry.id,
+            "type": entry.type,
+            "slug": entry.slug,
+            "title": entry.title,
+            "body": entry.body,
+            # legacy aliases, so the SPA keeps working until it moves over
+            "term": entry.title,
+            "definition": entry.body,
             "category": entry.category,
             "score": score,
         }
