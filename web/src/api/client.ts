@@ -96,8 +96,18 @@ export interface RelatedKbTerm {
 export const fetchRelatedKb = (nodeId: number, limit = 5) =>
   get<{ terms: RelatedKbTerm[] }>(`/nodes/${nodeId}/related-kb`, { limit });
 
-export const fetchThreads = (nodeId: number) =>
-  get<{ threads: ThreadRootOut[] }>("/messages", { node_id: nodeId });
+export const fetchThreads = (opts?: {
+  nodeId?: number;
+  agentId?: number;
+  repo?: string;
+  limit?: number;
+}) =>
+  get<{ threads: ThreadRootOut[] }>("/messages", {
+    node_id: opts?.nodeId,
+    agent_id: opts?.agentId,
+    repo: opts?.repo,
+    limit: opts?.limit,
+  });
 
 export const fetchThread = (threadId: number) =>
   get<{ messages: MessageOut[] }>("/messages", { thread_id: threadId });

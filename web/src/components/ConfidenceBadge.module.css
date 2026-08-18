@@ -1,0 +1,26 @@
+.badge {
+  margin-left: auto;
+  border-width: var(--border-width);
+  border-radius: var(--radius);
+  font-size: 0.625rem; /* 10px — no exact step on the type scale */
+  padding: var(--space-px) var(--space-2);
+  white-space: nowrap;
+}
+
+.badge[data-confidence="resolved"] {
+  color: var(--graph-confidence-resolved);
+  border-color: var(--graph-confidence-resolved);
+  border-style: solid;
+}
+
+.badge[data-confidence="llm_inferred"] {
+  color: var(--graph-confidence-llm);
+  border-color: var(--graph-confidence-llm);
+  border-style: dashed;
+}
+
+.badge[data-confidence="name_match"] {
+  color: var(--graph-confidence-name);
+  border-color: var(--graph-confidence-name);
+  border-style: dotted;
+}

@@ -1,0 +1,39 @@
+/* The sndwrks-local tab chiclets translated onto the cloud tokens: square
+   1px-outlined chips in lowercase mono, transparent until hovered, with the
+   accent border + selected tint marking the URL-matched tab. Distinct from
+   Tabs.module.css (the Radix state-tabs' underline triggers) on purpose —
+   these are page-level navigation, not in-page panel switching. */
+
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.tab {
+  display: inline-block;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text-soft);
+  font-family: var(--font-mono);
+  font-variation-settings: "wght" var(--font-mono-wght-bold);
+  font-size: var(--text-sm);
+  text-transform: lowercase;
+  transition:
+    color var(--duration-fast) var(--easing-out),
+    border-color var(--duration-fast) var(--easing-out),
+    background-color var(--duration-fast) var(--easing-out);
+}
+
+.tab:hover {
+  background-color: var(--color-hover);
+  color: var(--color-text);
+}
+
+.tabActive {
+  border-color: var(--color-accent);
+  background-color: var(--color-selected);
+  color: var(--color-text);
+}

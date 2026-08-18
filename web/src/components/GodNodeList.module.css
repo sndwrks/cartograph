@@ -1,0 +1,117 @@
+.panelHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* The gap below the heading row lives here, not on the h2 — `align-items:
+     center` centers the *margin box*, so a margin-bottom on the title would
+     offset its text upward relative to the ⚙ beside it. */
+  margin-bottom: var(--space-2);
+}
+
+.sectionHeading {
+  margin: 0;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--color-muted);
+}
+
+/* The Gear icon is sized in `em`, so font-size drives the artwork while the
+   Button's `size` only sets the hit target. */
+.settingsToggle {
+  font-size: var(--text-base);
+  color: var(--color-muted);
+}
+
+.settingsToggle:hover {
+  color: var(--color-text);
+}
+
+.settingsPanel {
+  background: var(--color-surface-sunken);
+  border: var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.settingsLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.thresholdInput {
+  width: 4rem;
+}
+
+.list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.row {
+  cursor: pointer;
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius);
+  padding: var(--space-2);
+}
+
+.row:hover {
+  border-color: var(--color-rule);
+  background: var(--color-hover);
+}
+
+.rowTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.name {
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Plain span + title, not the kit Tooltip: Tooltip.Content requires a
+   Tooltip.Provider mounted above it in the tree, and nothing in the app
+   mounts one (App.tsx, which would own that, is another agent's file). */
+.caution {
+  cursor: help;
+}
+
+.degrees {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.meter {
+  height: var(--space-1);
+  background: var(--color-rule);
+  border-radius: var(--radius);
+  margin: var(--space-1) 0;
+  overflow: hidden;
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.summary {
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

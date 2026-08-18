@@ -1,0 +1,125 @@
+/* Doubled selector deliberately outranks ui/Dialog.module.css's .content rule
+   (both are single class selectors; specificity ties are order-dependent) so
+   this sizing/layout override always wins regardless of CSS import order. */
+.content.content {
+  width: 40rem; /* 640px */
+  max-width: 90vw;
+  max-height: 70vh;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: var(--border);
+  color: var(--color-text);
+  font-size: var(--text-base);
+  padding: var(--space-4);
+  outline: none;
+  font-family: inherit;
+}
+
+.kindChips {
+  display: flex;
+  gap: 0.375rem; /* 6px */
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border);
+  flex-wrap: wrap;
+}
+
+.chip {
+  background: var(--color-bg);
+  color: var(--color-muted);
+  border: var(--border);
+  border-radius: var(--radius);
+  font-size: 0.6875rem; /* 11px */
+  padding: 0.1875rem var(--space-3); /* 3px 10px(ish) */
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.chipActive {
+  color: var(--color-text);
+}
+
+.chip[data-kind="class"] {
+  border-color: var(--graph-kind-class);
+}
+
+.chip[data-kind="function"] {
+  border-color: var(--graph-kind-function);
+}
+
+.chip[data-kind="method"] {
+  border-color: var(--graph-kind-method);
+}
+
+.chip[data-kind="module"] {
+  border-color: var(--graph-kind-module);
+}
+
+.chip[data-kind="doc"] {
+  border-color: var(--graph-kind-doc);
+}
+
+.chip[data-kind="config"] {
+  border-color: var(--graph-kind-config);
+}
+
+.results {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1) 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.empty {
+  padding: var(--space-2) var(--space-4);
+}
+
+.result {
+  display: grid;
+  grid-template-columns: auto minmax(3.75rem, auto) minmax(0, 1fr) auto 3.75rem;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.resultActive {
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+}
+
+.resultName {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultQname,
+.resultPath {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+}
+
+.scoreBar {
+  height: var(--space-1);
+  background: var(--color-rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.scoreFill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}

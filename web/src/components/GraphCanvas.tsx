@@ -7,7 +7,8 @@ import ForceGraph2D from "react-force-graph-2d";
 import { forceCollide } from "d3-force-3d";
 
 import { useAppStore } from "../store";
-import { BACKGROUND_COLOR, LABEL_COLOR } from "../theme";
+import { BACKGROUND_COLOR, LABEL_COLOR, RING_COLOR } from "../theme";
+import styles from "./GraphCanvas.module.css";
 
 export interface CanvasNode {
   id: number | string;
@@ -58,6 +59,10 @@ interface ForceGraphHandle {
 
 const LABEL_ZOOM = 1.5;
 const LABEL_FONT_PX = 11;
+// Mirrors --font-mono's fallback chain (tokens.css) — canvas text cannot read
+// CSS, so this literal has to be kept in sync with that var by hand.
+const LABEL_FONT_FAMILY =
+  "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 const LABEL_MAX_CHARS = 22;
 const LABEL_GAP = 6; // clear space between a circle and the text under it
 const MAX_LABEL_SPACING = 40; // cap so one long name can't blow the layout apart
@@ -93,7 +98,7 @@ function labelWidth(text: string): number {
   if (cached !== undefined) return cached;
   let width = text.length * 5.5; // fallback if there is no 2d context
   if (measureCtx) {
-    measureCtx.font = `${LABEL_FONT_PX}px sans-serif`;
+    measureCtx.font = `${LABEL_FONT_PX}px ${LABEL_FONT_FAMILY}`;
     width = measureCtx.measureText(text).width;
   }
   widthCache.set(text, width);
@@ -215,9 +220,9 @@ export default function GraphCanvas({
   }, [focusRequest]);
 
   return (
-    <div ref={containerRef} className="graph-canvas">
+    <div ref={containerRef} className={styles.graphCanvas}>
       {size.width > 0 && size.height > 0 && (
-        <div className="graph-canvas-fade" data-ready={ready ? "true" : "false"}>
+        <div className={styles.graphCanvasFade} data-ready={ready ? "true" : "false"}>
           <ForceGraph2D
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ref={attachGraph as any}
@@ -258,7 +263,7 @@ export default function GraphCanvas({
                 ctx.beginPath();
                 ctx.arc(x, y, datum.radius + 2.5, 0, 2 * Math.PI);
                 ctx.lineWidth = 2 / globalScale;
-                ctx.strokeStyle = "#ffffff";
+                ctx.strokeStyle = RING_COLOR;
                 ctx.stroke();
               }
               const showLabel =
@@ -272,7 +277,7 @@ export default function GraphCanvas({
                 );
                 const text = displayLabel(datum.label);
                 const labelY = y + datum.radius + 2;
-                ctx.font = `${fontSize}px sans-serif`;
+                ctx.font = `${fontSize}px ${LABEL_FONT_FAMILY}`;
                 ctx.textAlign = "center";
                 ctx.textBaseline = "top";
                 // knock the text out of whatever it happens to overlap

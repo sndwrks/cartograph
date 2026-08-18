@@ -1,0 +1,12 @@
+/* 340px, the panel's fixed width, has no matching space-scale step, so it is
+   expressed as a literal rem (21.25rem = 340px) — same idiom the kit already
+   uses for widths that don't land on the 4px spacing scale (see Select's
+   `min-width: 10rem`, Dialog's `max-width: 28rem`). */
+.panel {
+  width: 21.25rem;
+  flex: none;
+  border-left: var(--border);
+  background: var(--color-surface-raised);
+  padding: var(--space-4);
+  overflow-y: auto;
+}

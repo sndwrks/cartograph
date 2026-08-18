@@ -1,0 +1,13 @@
+.separator {
+  background: var(--color-rule);
+}
+
+.separator[data-orientation="horizontal"] {
+  height: var(--border-width);
+  width: 100%;
+}
+
+.separator[data-orientation="vertical"] {
+  width: var(--border-width);
+  height: 100%;
+}

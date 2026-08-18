@@ -1,0 +1,138 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 2.25rem;
+  padding: 0 var(--space-4);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--duration-fast) var(--easing-out),
+    border-color var(--duration-fast) var(--easing-out),
+    color var(--duration-fast) var(--easing-out),
+    filter var(--duration-fast) var(--easing-out);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ───────── Sizes (md is the base) ───────── */
+.sm {
+  height: 1.75rem;
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.lg {
+  height: 2.75rem;
+  padding: 0 var(--space-5);
+  font-size: var(--text-base);
+}
+
+.icon {
+  width: 2.25rem;
+  padding: 0;
+}
+
+.iconSm {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+}
+
+/* ───────── Variants ───────── */
+/* A full-saturation fill is loud in both themes. We use the same SHADED look in
+   light and dark — the accent/warn tinted into the surface, with a crisp colored
+   border and readable text. The mix percentages differ per theme because the
+   surface differs (white in light, grey-900 in dark); the dark overrides live
+   in the block below. */
+.primary {
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface));
+  border-color: var(--color-accent);
+}
+.primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 28%, var(--color-surface));
+}
+
+.default {
+  background: var(--color-surface);
+  border-color: var(--color-rule-strong);
+  color: var(--color-text);
+}
+.default:hover:not(:disabled) {
+  background: var(--color-hover);
+  border-color: var(--color-muted);
+}
+.default:active:not(:disabled) {
+  background: var(--color-active);
+}
+
+.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text);
+}
+.ghost:hover:not(:disabled) {
+  background: var(--color-hover);
+}
+.ghost:active:not(:disabled) {
+  background: var(--color-active);
+}
+
+.danger {
+  background: color-mix(in srgb, var(--color-warn) 12%, var(--color-surface));
+  border-color: var(--color-warn);
+  color: var(--color-text);
+}
+.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-warn) 20%, var(--color-surface));
+  border-color: var(--color-warn);
+}
+.danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-warn) 28%, var(--color-surface));
+}
+
+/* ───────── Dark-mode primary/danger ─────────
+   Same shaded treatment as light (see above), re-tuned for the darker surface —
+   the dark surface eats more of the tint, so the mix percentages run higher. */
+:root[data-theme="dark"] .primary {
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+:root[data-theme="dark"] .primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 28%, var(--color-surface));
+  border-color: var(--color-accent);
+}
+:root[data-theme="dark"] .primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 36%, var(--color-surface));
+  filter: none;
+}
+
+:root[data-theme="dark"] .danger {
+  background: color-mix(in srgb, var(--color-warn) 20%, var(--color-surface));
+  border-color: var(--color-warn);
+  color: var(--color-text);
+}
+:root[data-theme="dark"] .danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-warn) 30%, var(--color-surface));
+  border-color: var(--color-warn);
+}
+:root[data-theme="dark"] .danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-warn) 38%, var(--color-surface));
+}

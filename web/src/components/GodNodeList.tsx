@@ -5,7 +5,17 @@ import { useNavigate } from "react-router-dom";
 import { fetchGodNodes } from "../api/client";
 import type { EgoResponse, NodeOut } from "../api/types";
 import KindBadge from "./KindBadge";
+import { Gear } from "./icons";
 import { useAppStore } from "../store";
+import {
+  Button,
+  Input,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cx,
+} from "../ui";
+import styles from "./GodNodeList.module.css";
 
 const DEFAULT_CAUTION_THRESHOLD = Number(
   (import.meta.env.VITE_CAUTION_IN_DEGREE as string | undefined) ?? "10",
@@ -68,30 +78,32 @@ export default function GodNodeList() {
   };
 
   return (
-    <div className="god-node-list">
-      <div className="panel-heading">
-        <h2>
+    <div>
+      <div className={styles.panelHeading}>
+        <h2 className={styles.sectionHeading}>
           God nodes
           {communityId !== undefined ? ` · community #${communityId}` : ""}
         </h2>
-        <button
-          type="button"
-          className="icon-button"
+        <Button
+          variant="ghost"
+          size="iconSm"
           title="Panel settings"
+          className={styles.settingsToggle}
           onClick={() => setSettingsOpen((open) => !open)}
         >
-          ⚙
-        </button>
+          <Gear />
+        </Button>
       </div>
       {settingsOpen && (
-        <div className="panel-settings">
-          <label>
+        <div className={styles.settingsPanel}>
+          <label className={styles.settingsLabel}>
             ⚠ fan-in threshold
-            <input
+            <Input
               type="number"
               min={0}
               value={threshold}
               onChange={(event) => setThreshold(Number(event.target.value))}
+              className={styles.thresholdInput}
             />
           </label>
         </div>
@@ -101,31 +113,37 @@ export default function GodNodeList() {
       {!query.isPending && nodes.length === 0 && (
         <p className="muted">No nodes yet — run ingest and metrics.</p>
       )}
-      <ul>
+      <ul className={styles.list}>
         {nodes.map((node) => (
-          <li key={node.id} onClick={() => onRowClick(node)}>
-            <div className="god-row-top">
+          <li
+            key={node.id}
+            className={styles.row}
+            onClick={() => onRowClick(node)}
+          >
+            <div className={styles.rowTop}>
               <KindBadge kind={node.kind} />
-              <span className="god-name">{node.name}</span>
+              <span className={styles.name}>{node.name}</span>
               {node.degree_in > threshold && (
-                <span
-                  className="caution"
-                  title="High fan-in — change carefully"
-                >
-                  ⚠
-                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className={styles.caution}>⚠</span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    High fan-in ({node.degree_in} callers) — change carefully
+                  </TooltipContent>
+                </Tooltip>
               )}
-              <span className="god-degrees muted">
+              <span className={cx(styles.degrees, "muted")}>
                 ↓{node.degree_in} ↑{node.degree_out}
               </span>
             </div>
-            <div className="importance-meter">
+            <div className={styles.meter}>
               <span
-                className="importance-fill"
+                className={styles.meterFill}
                 style={{ width: `${(node.pagerank / maxRank) * 100}%` }}
               />
             </div>
-            <div className="god-summary muted">
+            <div className={cx(styles.summary, "muted")}>
               {node.summary ?? "no summary yet"}
             </div>
           </li>

@@ -1,0 +1,24 @@
+/*
+ * Overview.module.css — the onboarding empty state shown when a repo has no
+ * communities yet or isn't registered. The shared "Loading…"/error overlay
+ * (`.canvasMessage`) it also uses lives in ./viewFrame.module.css.
+ */
+
+.emptyStateHeading {
+  color: var(--color-text);
+  font-size: var(--text-base);
+  margin-bottom: var(--space-1);
+}
+
+.emptyStatePre {
+  background: var(--color-surface-sunken);
+  border: var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  overflow-x: auto;
+  max-width: 100%;
+}

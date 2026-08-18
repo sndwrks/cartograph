@@ -1,5 +1,5 @@
 import type { Confidence } from "../api/types";
-import { CONFIDENCE_COLORS } from "../theme";
+import styles from "./ConfidenceBadge.module.css";
 
 export default function ConfidenceBadge({
   confidence,
@@ -8,17 +8,8 @@ export default function ConfidenceBadge({
 }) {
   return (
     <span
-      className="confidence-badge"
-      style={{
-        color: CONFIDENCE_COLORS[confidence],
-        borderColor: CONFIDENCE_COLORS[confidence],
-        borderStyle:
-          confidence === "resolved"
-            ? "solid"
-            : confidence === "llm_inferred"
-              ? "dashed"
-              : "dotted",
-      }}
+      className={styles.badge}
+      data-confidence={confidence}
       title={
         confidence === "resolved"
           ? "Proven by imports/analysis"

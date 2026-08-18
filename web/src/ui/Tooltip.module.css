@@ -1,0 +1,17 @@
+.content {
+  max-width: 18rem;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  line-height: var(--line-height-xs);
+  box-shadow: var(--shadow-md);
+  user-select: none;
+  z-index: var(--z-overlay);
+}
+
+.arrow {
+  fill: var(--color-surface-raised);
+}

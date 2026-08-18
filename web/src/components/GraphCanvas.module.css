@@ -1,0 +1,21 @@
+/*
+ * GraphCanvas.module.css — wrapper-element styling only. Everything the
+ * <canvas> itself paints (node/link colors, tooltip markup) comes from
+ * src/theme.ts at runtime, not CSS — see GraphCanvas.tsx.
+ */
+
+.graphCanvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* Held hidden until the layout has settled and been fitted, so the graph
+   appears at its final zoom instead of animating into it. */
+.graphCanvasFade {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--easing-out);
+}
+
+.graphCanvasFade[data-ready="true"] {
+  opacity: 1;
+}

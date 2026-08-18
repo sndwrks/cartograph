@@ -1,5 +1,5 @@
 {
-  "name": "web",
+  "name": "cartograph-web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,6 +12,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",
     "d3-force-3d": "^3.0.6",
+    "radix-ui": "^1.6.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-force-graph-2d": "^1.29.1",

@@ -1,4 +1,4 @@
-// Response shapes mirroring backend/src/codegraph/api/schemas.py (slice 07/08).
+// Response shapes mirroring backend/src/cartograph/api/schemas.py (slice 07/08).
 
 export type Confidence = "resolved" | "llm_inferred" | "name_match";
 

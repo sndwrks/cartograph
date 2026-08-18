@@ -9,6 +9,8 @@ import GraphCanvas, {
 } from "../components/GraphCanvas";
 import { useAppStore } from "../store";
 import { COMMUNITY_COLOR, EDGE_COLOR } from "../theme";
+import styles from "./Overview.module.css";
+import viewFrameStyles from "./viewFrame.module.css";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -59,10 +61,16 @@ export default function Overview() {
   }, [query.data]);
 
   if (repo === null) {
-    return <div className="canvas-message">Pick a repository to explore.</div>;
+    return (
+      <div className={viewFrameStyles.canvasMessage}>
+        Pick a repository to explore.
+      </div>
+    );
   }
   if (query.isPending) {
-    return <div className="canvas-message">Loading overview…</div>;
+    return (
+      <div className={viewFrameStyles.canvasMessage}>Loading overview…</div>
+    );
   }
   if (query.isError) {
     if (query.error instanceof ApiError && query.error.status === 404) {
@@ -71,7 +79,7 @@ export default function Overview() {
       );
     }
     return (
-      <div className="canvas-message">
+      <div className={viewFrameStyles.canvasMessage}>
         Failed to load overview: {String(query.error)}
       </div>
     );
@@ -91,14 +99,14 @@ export default function Overview() {
 
 function EmptyState({ repo, title }: { repo: string; title: string }) {
   return (
-    <div className="canvas-message empty-state">
-      <h2>{title}</h2>
+    <div className={viewFrameStyles.canvasMessage}>
+      <h2 className={styles.emptyStateHeading}>{title}</h2>
       <p>Ingest the repository and compute metrics, then reload:</p>
-      <pre>
+      <pre className={styles.emptyStatePre}>
         {`docker compose run -v /host/path/${repo}:/repos/${repo} --rm api \\
-  uv run python -m codegraph.ingest run --repo ${repo}
+  uv run python -m cartograph.ingest run --repo ${repo}
 docker compose run --rm api \\
-  uv run python -m codegraph.metrics --repo ${repo}`}
+  uv run python -m cartograph.metrics --repo ${repo}`}
       </pre>
     </div>
   );

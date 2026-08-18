@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { VisuallyHidden } from "radix-ui";
 
 import { searchCode } from "../api/client";
 import type { NodeKind } from "../api/types";
 import { useAppStore } from "../store";
-import { KIND_COLORS } from "../theme";
+import { cx, Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui";
+import KindBadge from "./KindBadge";
+import styles from "./SearchPalette.module.css";
 
 const FILTERABLE_KINDS: NodeKind[] = [
   "class",
@@ -26,13 +29,14 @@ function useDebounced(value: string, delayMs: number): string {
 }
 
 export default function SearchPalette() {
-  const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [kinds, setKinds] = useState<Set<NodeKind>>(new Set());
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const repo = useAppStore((state) => state.repo);
   const setSelectedNodeId = useAppStore((state) => state.setSelectedNodeId);
+  const paletteOpen = useAppStore((state) => state.paletteOpen);
+  const setPaletteOpen = useAppStore((state) => state.setPaletteOpen);
   const navigate = useNavigate();
 
   const debouncedQuery = useDebounced(input, 200);
@@ -46,49 +50,66 @@ export default function SearchPalette() {
         mode: "hybrid",
         kinds: kindsParam,
       }),
-    enabled: open && debouncedQuery.trim().length > 0,
+    enabled: paletteOpen && debouncedQuery.trim().length > 0,
   });
   const results = query.data?.results ?? [];
   const maxScore = Math.max(...results.map((r) => r.score), 1e-9);
 
+  // Global ⌘K / Ctrl-K toggle. Escape-to-close and the focus trap are handled
+  // by Dialog (Radix) now, so this listener only owns the open shortcut. Reads
+  // the store directly rather than depending on `paletteOpen` so the listener
+  // doesn't need to be re-registered on every open/close.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setOpen((wasOpen) => !wasOpen);
-      } else if (event.key === "Escape") {
-        setOpen(false);
+        setPaletteOpen(!useAppStore.getState().paletteOpen);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [setPaletteOpen]);
 
   useEffect(() => {
-    if (open) {
+    if (paletteOpen) {
       setInput("");
       setActiveIndex(0);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
-  }, [open]);
+  }, [paletteOpen]);
 
   useEffect(() => setActiveIndex(0), [debouncedQuery, kindsParam]);
-
-  if (!open) return null;
 
   const choose = (index: number) => {
     const result = results[index];
     if (!result) return;
     setSelectedNodeId(result.node.id);
-    setOpen(false);
+    setPaletteOpen(false);
     navigate(`/n/${result.node.id}`);
   };
 
   return (
-    <div className="palette-backdrop" onClick={() => setOpen(false)}>
-      <div className="palette" onClick={(event) => event.stopPropagation()}>
+    <Dialog open={paletteOpen} onOpenChange={setPaletteOpen}>
+      <DialogContent
+        className={styles.content}
+        // The palette consumes its own Escape. SidePanel also listens for
+        // Escape on `window` to deselect the current node; without this,
+        // closing the palette would deselect at the same time. Radix listens
+        // on `document`, which bubbles first, so stopping propagation here
+        // reaches SidePanel's listener in time — whereas relying on the
+        // `paletteOpen` store value racing back through React does not.
+        onEscapeKeyDown={(event) => event.stopPropagation()}
+      >
+        <VisuallyHidden.Root>
+          <DialogTitle>Search code entities</DialogTitle>
+          <DialogDescription>
+            Search across indexed code entities. Use the arrow keys to
+            navigate results and Enter to open the selected result.
+          </DialogDescription>
+        </VisuallyHidden.Root>
         <input
           ref={inputRef}
+          className={styles.input}
           value={input}
           placeholder="Search code entities…"
           onChange={(event) => setInput(event.target.value)}
@@ -105,15 +126,15 @@ export default function SearchPalette() {
             }
           }}
         />
-        <div className="kind-chips">
+        <div className={styles.kindChips}>
           {FILTERABLE_KINDS.map((kind) => {
             const active = kinds.has(kind);
             return (
               <button
                 key={kind}
                 type="button"
-                className={`chip${active ? " chip-active" : ""}`}
-                style={active ? { borderColor: KIND_COLORS[kind] } : undefined}
+                className={cx(styles.chip, active && styles.chipActive)}
+                data-kind={active ? kind : undefined}
                 onClick={() =>
                   setKinds((previous) => {
                     const next = new Set(previous);
@@ -128,30 +149,25 @@ export default function SearchPalette() {
             );
           })}
         </div>
-        <ul className="palette-results">
+        <ul className={styles.results}>
           {results.map((result, index) => (
             <li
               key={result.node.id}
-              className={index === activeIndex ? "active" : ""}
+              className={cx(styles.result, index === activeIndex && styles.resultActive)}
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => choose(index)}
             >
-              <span
-                className="kind-badge"
-                style={{ background: KIND_COLORS[result.node.kind] }}
-              >
-                {result.node.kind}
-              </span>
-              <span className="result-name">{result.node.name}</span>
-              <span className="result-qname muted">
+              <KindBadge kind={result.node.kind} />
+              <span className={styles.resultName}>{result.node.name}</span>
+              <span className={cx(styles.resultQname, "muted")}>
                 {result.node.qualified_name}
               </span>
-              <span className="result-path muted">
+              <span className={cx(styles.resultPath, "muted")}>
                 {result.node.file_path ?? ""}
               </span>
-              <span className="score-bar">
+              <span className={styles.scoreBar}>
                 <span
-                  className="score-fill"
+                  className={styles.scoreFill}
                   style={{ width: `${(result.score / maxScore) * 100}%` }}
                 />
               </span>
@@ -159,9 +175,11 @@ export default function SearchPalette() {
           ))}
           {debouncedQuery.trim().length > 0 &&
             !query.isPending &&
-            results.length === 0 && <li className="muted">No matches.</li>}
+            results.length === 0 && (
+              <li className={cx(styles.empty, "muted")}>No matches.</li>
+            )}
         </ul>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

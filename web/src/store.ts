@@ -21,9 +21,15 @@ interface AppState {
   hopDepth: number;
   minConfidence: Confidence | null;
   focusRequest: FocusRequest | null;
+  // Whether the ⌘K palette is open. Lives here rather than being sniffed out of
+  // the DOM: SidePanel used to probe `document.querySelector(".palette")` to
+  // decide whether Esc was the palette's to handle, which breaks silently once
+  // CSS Modules hash that class name.
+  paletteOpen: boolean;
   setRepo: (repo: string | null) => void;
   setView: (view: ViewState) => void;
   setSelectedNodeId: (id: number | null) => void;
+  setPaletteOpen: (open: boolean) => void;
   setHopDepth: (depth: number) => void;
   setMinConfidence: (confidence: Confidence | null) => void;
   requestFocus: (id: number) => void;
@@ -40,9 +46,11 @@ export const useAppStore = create<AppState>((set) => ({
   hopDepth: 1,
   minConfidence: null,
   focusRequest: null,
+  paletteOpen: false,
   setRepo: (repo) => set({ repo, selectedNodeId: null }),
   setView: (view) => set({ view }),
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
+  setPaletteOpen: (open) => set({ paletteOpen: open }),
   setHopDepth: (depth) => set({ hopDepth: depth }),
   setMinConfidence: (confidence) => set({ minConfidence: confidence }),
   requestFocus: (id) =>

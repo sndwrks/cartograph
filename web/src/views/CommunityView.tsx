@@ -11,7 +11,9 @@ import GraphCanvas, {
 import { radiusScale, toCanvasLink, toCanvasNode } from "../graphStyle";
 import { useAppStore } from "../store";
 import { COMMUNITY_COLOR, EDGE_COLOR } from "../theme";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui";
 import { useOverviewQuery } from "./Overview";
+import viewFrameStyles from "./viewFrame.module.css";
 
 const LIMIT_OPTIONS = [100, 250, 500];
 
@@ -81,30 +83,35 @@ export default function CommunityView() {
   const label = communityLabels.get(communityId) ?? `community #${communityId}`;
 
   return (
-    <div className="view-frame">
-      <div className="view-toolbar">
-        <Breadcrumbs crumbs={[{ label: "Overview", to: "/" }, { label }]} />
-        <div className="toolbar-controls">
+    <div className={viewFrameStyles.viewFrame}>
+      <div className={viewFrameStyles.viewToolbar}>
+        <Breadcrumbs crumbs={[{ label: "Overview", to: "/graph" }, { label }]} />
+        <div className={viewFrameStyles.toolbarControls}>
           <label>
             top
-            <select
-              value={limit}
-              onChange={(event) => setLimit(Number(event.target.value))}
+            <Select
+              value={String(limit)}
+              onValueChange={(value) => setLimit(Number(value))}
             >
-              {LIMIT_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LIMIT_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
       </div>
-      <div className="view-canvas">
+      <div className={viewFrameStyles.viewCanvas}>
         {query.isPending ? (
-          <div className="canvas-message">Loading community…</div>
+          <div className={viewFrameStyles.canvasMessage}>Loading community…</div>
         ) : query.isError ? (
-          <div className="canvas-message">
+          <div className={viewFrameStyles.canvasMessage}>
             Failed to load community: {String(query.error)}
           </div>
         ) : (

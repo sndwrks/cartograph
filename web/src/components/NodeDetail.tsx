@@ -7,8 +7,11 @@ import type { Confidence, EgoResponse } from "../api/types";
 import ConfidenceBadge from "./ConfidenceBadge";
 import KindBadge from "./KindBadge";
 import ThreadList from "./ThreadList";
+import { Close } from "./icons";
 import { useAppStore } from "../store";
 import { useOverviewQuery } from "../views/Overview";
+import { Button } from "../ui";
+import styles from "./NodeDetail.module.css";
 
 interface EdgeRow {
   otherId: number;
@@ -104,12 +107,12 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
           {direction === "out" ? "→" : "←"} {rel}
           <span className="muted"> ({rows.length})</span>
         </summary>
-        <ul className="edge-rows">
+        <ul className={styles.edgeRows}>
           {rows.map((row, index) => (
-            <li key={`${row.otherId}-${index}`}>
+            <li key={`${row.otherId}-${index}`} className={styles.edgeRow}>
               <button
                 type="button"
-                className="link-button"
+                className={styles.linkButton}
                 onClick={() => selectNeighbor(row.otherId)}
               >
                 {row.otherName}
@@ -125,22 +128,23 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
     ));
 
   return (
-    <div className="node-detail">
-      <div className="detail-header">
+    <div className={styles.detail}>
+      <div className={styles.header}>
         <KindBadge kind={node.kind} />
-        <strong className="detail-name">{node.name}</strong>
-        <button
-          type="button"
-          className="icon-button"
+        <strong className={styles.name}>{node.name}</strong>
+        <Button
+          variant="ghost"
+          size="iconSm"
           title="Back to god-node list"
           onClick={() => setSelectedNodeId(null)}
+          className={styles.headerClose}
         >
-          ✕
-        </button>
+          <Close />
+        </Button>
       </div>
       <button
         type="button"
-        className="qname"
+        className={styles.monoBox}
         title="Copy qualified name"
         onClick={() => copy(node.qualified_name)}
       >
@@ -148,7 +152,7 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
       </button>
 
       <section>
-        <h3>Summary</h3>
+        <h3 className={styles.sectionHeading}>Summary</h3>
         <p className={node.summary ? "" : "muted"}>
           {node.summary ?? "not yet summarized"}
         </p>
@@ -156,10 +160,10 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
 
       {location !== null && (
         <section>
-          <h3>Location</h3>
+          <h3 className={styles.sectionHeading}>Location</h3>
           <button
             type="button"
-            className="location"
+            className={styles.monoBox}
             title="Copy location"
             onClick={() => copy(location)}
           >
@@ -169,8 +173,8 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
       )}
 
       <section>
-        <h3>Metrics</h3>
-        <dl className="metrics">
+        <h3 className={styles.sectionHeading}>Metrics</h3>
+        <dl className={styles.metrics}>
           <dt>pagerank</dt>
           <dd>{node.pagerank.toFixed(4)}</dd>
           <dt>degree</dt>
@@ -182,7 +186,7 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
             {node.community_id !== null ? (
               <button
                 type="button"
-                className="link-button"
+                className={styles.linkButton}
                 onClick={() => navigate(`/c/${node.community_id}`)}
               >
                 {community?.label ?? `community #${node.community_id}`}
@@ -195,7 +199,7 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
       </section>
 
       <section>
-        <h3>Edges</h3>
+        <h3 className={styles.sectionHeading}>Edges</h3>
         {ego.isPending && <p className="muted">Loading edges…</p>}
         {renderGroups(groups.outgoing, "out")}
         {renderGroups(groups.incoming, "in")}
@@ -207,9 +211,9 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
       </section>
 
       <section>
-        <h3>Related KB terms</h3>
+        <h3 className={styles.sectionHeading}>Related KB terms</h3>
         {relatedKb.data && relatedKb.data.terms.length > 0 ? (
-          <ul className="kb-terms">
+          <ul className={styles.kbTerms}>
             {relatedKb.data.terms.map((term) => (
               <li key={term.term} title={term.definition}>
                 <strong>{term.term}</strong>
@@ -227,17 +231,17 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
       </section>
 
       <section>
-        <h3>Discussion</h3>
+        <h3 className={styles.sectionHeading}>Discussion</h3>
         <ThreadList nodeId={node.id} />
       </section>
 
-      <button
-        type="button"
-        className="action-button expand-button"
+      <Button
+        variant="primary"
         onClick={() => navigate(`/n/${node.id}`)}
+        className={styles.expandButton}
       >
         Expand ego graph
-      </button>
+      </Button>
     </div>
   );
 }

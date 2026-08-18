@@ -16,7 +16,9 @@ import {
   toCanvasNode,
 } from "../graphStyle";
 import { useAppStore } from "../store";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui";
 import { useOverviewQuery } from "./Overview";
+import viewFrameStyles from "./viewFrame.module.css";
 
 const HOP_OPTIONS = [1, 2, 3];
 
@@ -25,6 +27,11 @@ const CONFIDENCE_OPTIONS: { label: string; value: Confidence | null }[] = [
   { label: "≥ llm_inferred", value: "llm_inferred" },
   { label: "resolved only", value: "resolved" },
 ];
+
+// Radix Select.Item rejects an empty-string value (reserved to mean "no
+// selection"), so the "All" / null option round-trips through this sentinel
+// instead of "".
+const ANY_CONFIDENCE_VALUE = "any";
 
 export default function EgoView() {
   const params = useParams();
@@ -63,7 +70,7 @@ export default function EgoView() {
   }, [query.data, nodeId]);
 
   const center = query.data?.nodes.find((node) => node.id === nodeId);
-  const crumbs: Crumb[] = [{ label: "Overview", to: "/" }];
+  const crumbs: Crumb[] = [{ label: "Overview", to: "/graph" }];
   if (center?.community_id != null) {
     const community = overview.data?.communities.find(
       (c) => c.id === center.community_id,
@@ -76,47 +83,60 @@ export default function EgoView() {
   crumbs.push({ label: center?.name ?? `node #${nodeId}` });
 
   return (
-    <div className="view-frame">
-      <div className="view-toolbar">
+    <div className={viewFrameStyles.viewFrame}>
+      <div className={viewFrameStyles.viewToolbar}>
         <Breadcrumbs crumbs={crumbs} />
-        <div className="toolbar-controls">
+        <div className={viewFrameStyles.toolbarControls}>
           <label>
             hops
-            <select
-              value={hopDepth}
-              onChange={(event) => setHopDepth(Number(event.target.value))}
+            <Select
+              value={String(hopDepth)}
+              onValueChange={(value) => setHopDepth(Number(value))}
             >
-              {HOP_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {HOP_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label>
             confidence
-            <select
-              value={minConfidence ?? ""}
-              onChange={(event) =>
+            <Select
+              value={minConfidence ?? ANY_CONFIDENCE_VALUE}
+              onValueChange={(value) =>
                 setMinConfidence(
-                  (event.target.value || null) as Confidence | null,
+                  value === ANY_CONFIDENCE_VALUE ? null : (value as Confidence),
                 )
               }
             >
-              {CONFIDENCE_OPTIONS.map((option) => (
-                <option key={option.label} value={option.value ?? ""}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CONFIDENCE_OPTIONS.map((option) => (
+                  <SelectItem
+                    key={option.label}
+                    value={option.value ?? ANY_CONFIDENCE_VALUE}
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
       </div>
-      <div className="view-canvas">
+      <div className={viewFrameStyles.viewCanvas}>
         {query.isPending ? (
-          <div className="canvas-message">Loading ego graph…</div>
+          <div className={viewFrameStyles.canvasMessage}>Loading ego graph…</div>
         ) : query.isError ? (
-          <div className="canvas-message">
+          <div className={viewFrameStyles.canvasMessage}>
             Failed to load ego graph: {String(query.error)}
           </div>
         ) : (

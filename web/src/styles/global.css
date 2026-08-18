@@ -1,0 +1,153 @@
+/*
+ * global.css — imported once from src/main.tsx.
+ *
+ * Pulls in the design tokens, applies a minimal reset, and sets token-driven
+ * defaults on bare elements. Everything here reads from tokens.css; there are
+ * no literal colors/sizes so light/dark and global tuning flow from the token
+ * layer.
+ */
+
+@import "./tokens.css";
+
+/* ───────── Reset ───────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--line-height-base);
+  font-weight: var(--font-weight-regular);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Recolor the whole tree when the theme attribute flips */
+body {
+  transition:
+    background-color var(--duration-base) var(--easing-out),
+    color var(--duration-base) var(--easing-out);
+}
+
+/* ───────── Elements ───────── */
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-accent-soft);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono);
+  font-variation-settings: "wght" var(--font-mono-wght-regular);
+  font-size: 0.9em;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+ul[role="list"],
+ol[role="list"] {
+  list-style: none;
+  padding: 0;
+}
+
+hr {
+  border: none;
+  border-top: var(--border);
+}
+
+/* ───────── Focus ring (token-driven, keyboard only) ───────── */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--radius);
+}
+
+::selection {
+  background: var(--color-selected);
+}
+
+/* ───────── Reduced motion ───────── */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ───────── Shared utility classes (lifted from the old index.css) ───────── */
+.muted {
+  color: var(--color-muted);
+}
+
+.tooltip {
+  /* injected as an HTML string by graphStyle.ts / Overview.tsx */
+  padding: var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  box-shadow: var(--shadow-md);
+  max-width: 280px;
+}
+
+/* react-force-graph injects this tooltip container and our tooltip markup
+   renders inside it — neutralize its box so ours is the only one seen. */
+.float-tooltip-kap {
+  padding: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}

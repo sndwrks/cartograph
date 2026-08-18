@@ -1,0 +1,297 @@
+/*
+ * tokens.css — the design-system source of truth for the admin frontend.
+ *
+ * Every design value the UI uses is a CSS variable defined here. Components
+ * (CSS Modules under src/components/**) must reference these vars — never a
+ * raw hex, px border, or rem padding — so the whole look is tunable from one
+ * file and dark/light is a swap of the semantic-alias block alone.
+ *
+ * Two layers:
+ *   1. Primitives (:root)          — theme-invariant raw values (the grey ramp,
+ *                                     brand colors, type/space/radius scales).
+ *   2. Semantic aliases            — what components actually consume
+ *                                     (--color-bg, --color-text, --pad, …).
+ *                                     LIGHT lives on :root; DARK overrides only
+ *                                     the color aliases under [data-theme="dark"].
+ *
+ * The theme provider (src/lib/theme.tsx) writes the resolved theme onto
+ * <html data-theme="light|dark">. A pre-paint inline script in __root resolves
+ * `system` before first paint to avoid a flash — so this file needs no
+ * prefers-color-scheme duplication.
+ */
+
+:root {
+  /* ───────── Color primitives: purple-grey 11-step ramp ─────────
+     Mirrors cloud-ui's warm-grey ramp construction, hue-flipped: B > R > G at
+     hue ≈ 273–280°, with the channel spread peaking mid-ramp like the source. */
+  --color-grey-50: #f9f5fb;
+  --color-grey-100: #e9e4ed;
+  --color-grey-200: #d9d1de;
+  --color-grey-300: #c6bccd;
+  --color-grey-400: #aea2b6;
+  --color-grey-500: #9a8da3;
+  --color-grey-600: #8c8590;
+  --color-grey-700: #6a636f;
+  --color-grey-800: #49444d;
+  --color-grey-900: #28242b;
+  --color-grey-950: #151018;
+  --color-surface-white: #ffffff;
+
+  /* ───────── Color primitives: brand ───────── */
+  --color-brand-purple: #8b5cf6; /* vibrant violet — the mock-dashboard accent */
+  --color-brand-purple-light: #a78bfa;
+  --color-brand-lime: #c2f280;
+
+  /* ───────── Color primitives: status (from the local app's alert palette) ───────── */
+  --color-good: #90be6d;
+  /* Darkened from #f94144 so white text on a danger fill meets WCAG AA
+     (4.5:1) — #f94144 only reached 3.57:1. Still reads as the status red. */
+  --color-warn: #d92d31;
+  --color-caution: #f9c74f;
+  --color-info: #277da1;
+
+  /* ───────── Type families ─────────
+     This app deliberately loads no external fonts — system stacks only. */
+  --font-sans: system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Variable-weight knobs for the mono face: a light default for incidental mono
+     (code/kbd) and a bold for emphasis (sidebar nav labels + their tooltips).
+     Inert here — the fallback mono stack has no variable-font axis, so
+     font-variation-settings: "wght" does nothing on it. Kept defined so
+     ported component CSS referencing them still resolves; mono emphasis
+     should also set font-weight directly. */
+  --font-mono-wght-regular: 200;
+  --font-mono-wght-bold: 600;
+
+  /* ───────── Type scale (dashboard-tuned — denser than the marketing scale) ───────── */
+  --text-xs: 0.75rem;
+  --line-height-xs: 1.4;
+  --text-sm: 0.875rem;
+  --line-height-sm: 1.45;
+  --text-base: 1rem;
+  --line-height-base: 1.5;
+  --text-lg: 1.25rem;
+  --line-height-lg: 1.4;
+  --text-xl: 1.5rem;
+  --line-height-xl: 1.3;
+  --text-2xl: 2rem;
+  --line-height-2xl: 1.2;
+  --text-3xl: 2.5rem;
+  --line-height-3xl: 1.1;
+
+  /* ───────── Font weights ─────────
+     The Acumin Pro kit (`hai5cql`) ships Regular (400) + Bold (700) only.
+     The named tiers are kept for semantic clarity and map to those two real
+     weights — no synthetic bolding. Add Medium/Semibold to the Typekit kit and
+     bump these to 500/600 if a finer scale is needed later. */
+  --font-weight-regular: 400;
+  --font-weight-medium: 400; /* no 500 in the kit → regular */
+  --font-weight-semibold: 700; /* no 600 in the kit → bold */
+  --font-weight-bold: 700;
+
+  /* ───────── Tracking ───────── */
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-label: 0.05em; /* uppercase eyebrow / field labels */
+
+  /* ───────── Spacing / padding scale (4px base; everything a var) ───────── */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Named semantic spacing — default component padding is 1rem */
+  --pad: var(--space-4);
+  --pad-tight: var(--space-2);
+  --pad-loose: var(--space-6);
+  --gap: var(--space-3);
+  --gap-tight: var(--space-2);
+
+  /* ───────── Layout constants (from the local app's dimensions) ───────── */
+  --header-height: 2.5rem;
+  --sidebar-collapsed: 4rem;
+  /* Wide enough for the longest nav label ("Notifications") without truncation. */
+  --sidebar-expanded: 14rem;
+  --content-max: 1300px;
+
+  /* ───────── Breakpoints ─────────
+     --bp-sm  640px — phone; stack two-column rows, tighten padding.
+     --bp-md  960px — the nav rail goes off-canvas into a Drawer below this.
+
+     ⚠ THESE CANNOT BE USED IN A MEDIA QUERY. `@media (max-width: var(--bp-md))`
+     is invalid CSS: custom properties do not resolve in media conditions, and
+     the query then simply NEVER MATCHES — silently, with no error, and the page
+     is just not responsive. There is no plugin in this build (plain esbuild/
+     postcss, no lightningcss, no @custom-media) that changes this.
+
+     So: use these tokens in `width:`/`max-width:` declarations and JS
+     getComputedStyle reads, and write the LITERAL px in every @media, tagged
+     with the token name in a trailing comment, e.g.
+
+         @media (max-width: 960px)   ... --bp-md
+
+     Do not "fix" a literal into a var() here — it breaks every breakpoint at
+     once, and nothing fails loudly enough to notice. */
+  --bp-sm: 40rem;
+  --bp-md: 60rem;
+
+  /* ───────── Borders (1px throughout) ───────── */
+  --border-width: 1px;
+  --border: var(--border-width) solid var(--color-rule);
+  --border-strong: var(--border-width) solid var(--color-rule-strong);
+
+  /* ───────── Radius — SQUARE by default ─────────
+     Every component routes its corners through `--radius` (the single knob).
+     It is `none` (square) — the house style. The scale below stays defined only
+     for a deliberate one-off (e.g. a pill badge); nothing uses it by default,
+     so changing `--radius` alone reshapes the entire kit. */
+  --radius-none: 0;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-pill: 9999px;
+  --radius: var(--radius-none); /* ← the one knob — all components use var(--radius) */
+
+  /* ───────── Motion ───────── */
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+  --duration-slow: 320ms;
+  --easing-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --easing-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ───────── z-index scale ─────────
+     Radix portals every floating layer to <body>, so DOM nesting is flattened
+     and z-index alone decides stacking. A Select/Popover is frequently opened
+     from INSIDE a modal Dialog, so its content must sit ABOVE the modal overlay
+     — otherwise it renders behind the overlay (invisibly) and the click meant
+     for it dismisses the dialog. Hence: modal < popover < dropdown < toast. */
+  --z-sidebar: 10;
+  --z-sticky: 20;
+  --z-modal: 100;
+  --z-overlay: 110;
+  --z-dropdown: 115;
+  --z-toast: 120;
+
+  /* ───────── Graph canvas ─────────
+     react-force-graph paints to <canvas>, which cannot read CSS. theme.ts
+     resolves these once at boot via getComputedStyle.
+     MUST stay 6-digit hex: the canvas code builds alpha by appending a hex
+     suffix (`${EDGE_COLOR}dd`), which fails SILENTLY on any other notation. */
+  --graph-bg: #151018;
+  --graph-edge: #49444d;
+  --graph-label: #e9e4ed;
+  --graph-community: #8b5cf6;
+  --graph-kind-module: #3987e5;
+  --graph-kind-class: #eda100;
+  --graph-kind-function: #c2f280;
+  --graph-kind-method: #17b8b8;
+  --graph-kind-file: #8c8590;
+  --graph-kind-doc: #a78bfa;
+  --graph-kind-config: #d92d31;
+  --graph-confidence-resolved: #90be6d;
+  --graph-confidence-llm: #f9c74f;
+  --graph-confidence-name: #8c8590;
+  --graph-ring: #e9e4ed;
+
+  /* ═════════ Semantic aliases — LIGHT (default) ═════════ */
+  --color-bg: var(--color-grey-100);
+  --color-surface: var(--color-surface-white);
+  --color-surface-raised: var(--color-surface-white);
+  --color-surface-sunken: var(--color-grey-50);
+
+  --color-text: var(--color-grey-950);
+  --color-text-soft: var(--color-grey-800);
+  --color-muted: var(--color-grey-600);
+  --color-on-accent: var(--color-grey-950); /* text/icon sitting on an accent fill */
+
+  --color-rule: var(--color-grey-400);
+  --color-rule-strong: var(--color-grey-500);
+
+  --color-accent: var(--color-brand-purple);
+  --color-accent-soft: var(--color-brand-purple-light);
+  /* The brand violet (#8b5cf6) as small TEXT on light surfaces only reaches
+     ~3.9:1 on the purple-grey page bg. This deeper violet meets AA (4.5:1) on
+     the page bg, the --color-selected tint, and a highlighted list row, for
+     accent text (toggle-on, active tab, checked select item). */
+  --color-accent-text: #6d28d9;
+  --color-accent-ring: rgb(139 92 246 / 0.4);
+  --color-brand: var(--color-brand-lime);
+
+  /* Lightened toward the page bg (grey-100) so the row/ghost hover stays soft —
+     still a step over grey-100 so it remains visible against the page bg. */
+  --color-hover: var(--color-grey-100);
+  --color-active: var(--color-grey-300);
+  /* The active/selected fill (table active row, sidebar active item, toggles,
+     dropdown-checked): the accent knocked down to a tint. */
+  --color-selected: rgb(139 92 246 / 0.2);
+  --color-overlay: rgb(21 16 24 / 0.5); /* modal/scrim backdrop */
+
+  /* Shadows (purple, ink-tinted in light — ink = grey-950) */
+  --shadow-sm: 0 1px 2px rgb(21 16 24 / 0.08);
+  --shadow-md: 0 4px 12px -2px rgb(21 16 24 / 0.14);
+  --shadow-lg: 0 8px 24px -8px rgb(21 16 24 / 0.18);
+  --shadow-focus: 0 0 0 2px var(--color-accent-ring);
+
+  /* ───────── Chart series (categorical, FIXED order — never cycled) ─────────
+     Validated per mode against the chart surface (dataviz six-checks:
+     lightness band, chroma floor, CVD separation, contrast). Series beyond
+     slot 4 fold into "Other" — never a generated 5th hue. */
+  --chart-1: #2a78d6;
+  --chart-2: #1baf7a;
+  --chart-3: #eda100;
+  --chart-4: #008300;
+}
+
+/* ═════════ Semantic aliases — DARK (override colors only) ═════════ */
+:root[data-theme="dark"] {
+  --color-bg: var(--color-grey-950);
+  --color-surface: var(--color-grey-900);
+  --color-surface-raised: #1e1a24; /* a hair above grey-900 for layered panels */
+  --color-surface-sunken: #0f0c13;
+
+  --color-text: var(--color-grey-100);
+  --color-text-soft: var(--color-grey-300);
+  --color-muted: var(--color-grey-500);
+  --color-on-accent: var(--color-grey-950);
+
+  --color-rule: var(--color-grey-800);
+  --color-rule-strong: var(--color-grey-700);
+
+  --color-accent: var(--color-brand-purple);
+  --color-accent-soft: var(--color-brand-purple-light);
+  /* Unlike cloud's orange, #8b5cf6 on the grey-900 surface is only ~3.6:1 —
+     accent FILLS are fine, but accent-as-text needs the lighter violet
+     (#a78bfa ≈ 5.6:1) to clear AA. */
+  --color-accent-text: var(--color-accent-soft);
+  --color-accent-ring: rgb(139 92 246 / 0.45);
+  --color-brand: var(--color-brand-lime);
+
+  /* Knocked down from grey-800 — a full grey-800 row highlight was too loud on
+     the grey-900 dark surface; this sits halfway between surface and grey-800. */
+  --color-hover: color-mix(in srgb, var(--color-grey-800) 50%, var(--color-grey-900));
+  --color-active: var(--color-grey-700);
+  /* Darker/deeper accent tint on dark so the active row + sidebar item read
+     clearly against the dark surface. */
+  --color-selected: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+  --color-overlay: rgb(0 0 0 / 0.65);
+
+  /* Shadows go black + deeper on a dark ground */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+
+  /* Chart series — dark-mode steps from the same hues, re-validated against
+     the dark chart surface (never an automatic flip of the light values). */
+  --chart-1: #3987e5;
+  --chart-2: #199e70;
+  --chart-3: #c98500;
+  --chart-4: #008300;
+}

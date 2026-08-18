@@ -1,9 +1,9 @@
 import type { NodeKind } from "../api/types";
-import { KIND_COLORS } from "../theme";
+import styles from "./KindBadge.module.css";
 
 export default function KindBadge({ kind }: { kind: NodeKind }) {
   return (
-    <span className="kind-badge" style={{ background: KIND_COLORS[kind] }}>
+    <span className={styles.badge} data-kind={kind}>
       {kind}
     </span>
   );

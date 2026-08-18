@@ -1,0 +1,23 @@
+/* Viewport units rather than height:100% — global.css sets only
+   `body { min-height: 100vh }`, so a percentage height here would resolve
+   against an auto-height #root, collapse the rows, and let the force-graph
+   canvas size itself to its own content instead of to the screen.
+   dvh keeps it right when a mobile URL bar collapses. Matches cloud-ui AppShell. */
+.shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.canvasArea {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}

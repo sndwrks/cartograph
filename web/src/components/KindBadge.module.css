@@ -1,0 +1,36 @@
+.badge {
+  border-radius: var(--radius);
+  color: var(--graph-bg);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  padding: var(--space-px) var(--space-2);
+  text-transform: uppercase;
+}
+
+.badge[data-kind="module"] {
+  background: var(--graph-kind-module);
+}
+
+.badge[data-kind="class"] {
+  background: var(--graph-kind-class);
+}
+
+.badge[data-kind="function"] {
+  background: var(--graph-kind-function);
+}
+
+.badge[data-kind="method"] {
+  background: var(--graph-kind-method);
+}
+
+.badge[data-kind="file"] {
+  background: var(--graph-kind-file);
+}
+
+.badge[data-kind="doc"] {
+  background: var(--graph-kind-doc);
+}
+
+.badge[data-kind="config"] {
+  background: var(--graph-kind-config);
+}

@@ -1,0 +1,40 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 1.25rem;
+  padding: 0 var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.default {
+  color: var(--color-text-soft);
+  /* rule-strong: the plain rule tone all but vanishes against dark surfaces
+     (QA: the "Never connected" chip), and the chip outline must read as a chip. */
+  border-color: var(--color-rule-strong);
+}
+
+.success {
+  color: var(--color-good);
+  border-color: var(--color-good);
+}
+
+.warning {
+  color: var(--color-warn);
+  border-color: var(--color-warn);
+}
+
+.danger {
+  color: var(--color-caution);
+  border-color: var(--color-caution);
+}
+
+.info {
+  color: var(--color-info);
+  border-color: var(--color-info);
+}
