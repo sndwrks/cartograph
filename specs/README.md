@@ -1,8 +1,8 @@
 # Cartograph — Implementation Slices
 
-This folder decomposes [`initial-spec.md`](initial-spec.md) into 18 implementation slices, each sized for a single focused implementation session. Implement them in numeric order unless the dependency notes say otherwise; every slice's **Acceptance criteria** must pass before starting the next.
+This folder decomposes [`initial-spec.md`](initial-spec.md) into 19 implementation slices, each sized for a single focused implementation session. Implement them in numeric order unless the dependency notes say otherwise; every slice's **Acceptance criteria** must pass before starting the next.
 
-Slices 01–14 build the system the initial spec describes. Slices 15–18 extend the knowledge base past it: a typed entry model, an agent-propose/human-publish workflow, and Markdown export.
+Slices 01–14 build the system the initial spec describes. Slices 15–18 extend the knowledge base past it: a typed entry model, an agent-propose/human-publish workflow, and Markdown export. Slice 19 repairs the board: anchoring by qualified name over REST, refusing input the API does not understand instead of ignoring it, and a delete button for the cleanup only a human is allowed to do.
 
 ## How to work a slice
 
@@ -33,6 +33,7 @@ Slices 01–14 build the system the initial spec describes. Slices 15–18 exten
 | [16](slice-16-kb-propose-and-review.md) | KB propose & review | M6 | 15 (09) |
 | [17](slice-17-kb-markdown-export.md) | KB Markdown export | M6 | 15 |
 | [18](slice-18-spa-kb-page.md) | SPA knowledge-base page | M6 | 15, 16 (12) |
+| [19](slice-19-board-anchoring-and-deletion.md) | Board anchoring by name & message deletion | M7 | 08, 09, 14, 18 |
 
 Slices 03/04 are DB-free and can be built in parallel with 02. Slices 10–12 (SPA) can proceed in parallel with 08/09 once 07 is done. Slices 16–18 all depend on 15 and on nothing else in the group, so they can run in parallel once it lands.
 
@@ -93,3 +94,4 @@ code-graph/
 - **M4 (13):** tier-3 summaries/embeddings/community labels; hybrid search on.
 - **M5 (14):** agent message board end to end, git-hook incremental ingestion.
 - **M6 (15–18):** typed knowledge base — five entry types behind a code registry, agents propose and humans publish, Markdown export, and a `/kb` page in the SPA. (`initial-spec.md` §9 also floats an optional tier-2 LSP milestone; it is unrelated to this group and has no slice.)
+- **M7 (19):** the board is trustworthy — a claim anchors by qualified name over REST as well as MCP, an unrecognised field or query parameter is refused rather than ignored, and a human can delete a message from the SPA.
