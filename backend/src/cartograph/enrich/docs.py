@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cartograph.extractors.base import hash_content
-from cartograph.ingest.walker import DENY_DIRS
+from cartograph.ingest.walker import denied_dirs
 from cartograph.models import NodeKind, Repository
 from cartograph.query import enrich as q
 
@@ -23,12 +24,15 @@ CONFIG_SUFFIXES = {".sql", ".toml", ".yaml", ".yml", ".json"}
 DOC_TEXT_CAP = 8000
 
 
-def discover_artifacts(root: Path) -> list[tuple[str, NodeKind]]:
+def discover_artifacts(
+    root: Path, exclude: Iterable[str] = ()
+) -> list[tuple[str, NodeKind]]:
     """(repo-relative posix path, kind) for docs and config artifacts."""
+    deny = denied_dirs(exclude)
     results: list[tuple[str, NodeKind]] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(
-            d for d in dirnames if d not in DENY_DIRS and not d.startswith(".")
+            d for d in dirnames if d not in deny and not d.startswith(".")
         )
         rel_dir = Path(dirpath).relative_to(root)
         at_root = rel_dir == Path(".")
@@ -75,7 +79,7 @@ async def run(
     limit: int | None = None,
 ) -> dict:
     root = Path(repo.root_path)
-    artifacts = discover_artifacts(root)
+    artifacts = discover_artifacts(root, repo.exclude_dirs)
     if limit is not None:
         artifacts = artifacts[:limit]
     created = updated = unchanged = linked_edges = failed = 0

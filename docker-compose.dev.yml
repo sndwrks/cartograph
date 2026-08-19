@@ -29,10 +29,6 @@ services:
     image: node:22-alpine
     build: !reset null
     working_dir: /app
-    environment:
-      # the SPA has no repo-discovery endpoint; without this it falls back to
-      # the py_sample fixture (web/src/store.ts). First entry is the default.
-      VITE_REPOS: "${VITE_REPOS:-sndwrks-local,py_sample}"
     volumes:
       - ./web:/app
     command: ["sh", "-c", "npm install && npm run dev -- --host"]

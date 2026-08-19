@@ -217,3 +217,70 @@ async def test_failed_run_recorded(session, repo_root):
     )
     assert run.status == "failed"
     assert run.error and "FileNotFoundError" in run.error
+
+
+async def test_exclude_dirs(session, repo_root):
+    gen = repo_root / "generated"
+    gen.mkdir()
+    (gen / "bundle.py").write_text("def blob():\n    return 1\n")
+
+    repo = await register(session, repo_root)
+    await ingest_repo(session, repo)
+    ids = await node_ids(session, repo.id)
+    assert ("generated/bundle.py", "file") in ids
+
+    # excluding after the fact removes the stale nodes on the next full walk
+    repo = await q.upsert_repository(
+        session, "py_sample", str(repo_root), exclude_dirs=["generated"]
+    )
+    await session.commit()
+    stats = await ingest_repo(session, repo)
+    assert stats["nodes_deleted"] >= 1
+    ids = await node_ids(session, repo.id)
+    assert not any(qname.startswith("generated") for (qname, _kind) in ids)
+    assert ("pkg/util.py", "file") in ids
+
+    # the --files path (hook freshenings) can't sneak an excluded file back in
+    stats = await ingest_repo(session, repo, files=["generated/bundle.py"])
+    assert stats["files_seen"] == 0
+    ids = await node_ids(session, repo.id)
+    assert not any(qname.startswith("generated") for (qname, _kind) in ids)
+
+
+async def test_exclude_dirs_kept_when_flag_omitted(session, repo_root):
+    await q.upsert_repository(
+        session, "py_sample", str(repo_root), exclude_dirs=["generated"]
+    )
+    await session.commit()
+
+    # re-register without exclude_dirs (the CLI passes None) keeps the list
+    repo = await q.upsert_repository(session, "py_sample", str(repo_root))
+    await session.commit()
+    assert repo.exclude_dirs == ["generated"]
+
+    # an explicit empty list clears it
+    repo = await q.upsert_repository(
+        session, "py_sample", str(repo_root), exclude_dirs=[]
+    )
+    await session.commit()
+    assert repo.exclude_dirs == []
+
+
+async def test_upsert_nodes_dedupes_within_batch(session, repo_root):
+    # minified bundles carry duplicate qualified names in one file; Postgres
+    # rejects ON CONFLICT DO UPDATE hitting the same row twice per statement
+    repo = await register(session, repo_root)
+    row = {
+        "repository_id": repo.id,
+        "kind": NodeKind.function,
+        "name": "To",
+        "qualified_name": "bundle.To",
+        "file_path": "bundle.js",
+        "start_line": 1,
+        "end_line": 1,
+        "content_hash": "first",
+    }
+    ids = await q.upsert_nodes(session, [row, {**row, "content_hash": "last"}])
+    assert list(ids) == ["bundle.To"]
+    node = await session.get(Node, ids["bundle.To"])
+    assert node.content_hash == "last"

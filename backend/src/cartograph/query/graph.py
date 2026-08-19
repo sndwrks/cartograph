@@ -22,6 +22,7 @@ from cartograph.models import (
     EdgeRel,
     Node,
     NodeKind,
+    Repository,
 )
 from cartograph.query.ingest import get_repository_by_name
 from cartograph.query.messages import UnknownRepositoryError
@@ -107,6 +108,13 @@ async def resolve_node_by_name(
     if len(matches) > 1:
         raise AmbiguousNodeNameError(qualified_name, matches[:CANDIDATE_CAP])
     return matches[0]
+
+
+async def repositories(session: AsyncSession) -> list[str]:
+    """Registered repository names, alphabetical."""
+    return list(
+        (await session.scalars(select(Repository.name).order_by(Repository.name))).all()
+    )
 
 
 async def overview(session: AsyncSession, repo_name: str) -> dict | None:

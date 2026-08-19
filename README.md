@@ -157,6 +157,30 @@ docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
 
 Every run writes an `ingest_runs` row with per-phase timings and node/edge deltas.
 
+### Excluding directories
+
+The walker already skips a built-in deny-list — `node_modules`, `.venv`,
+`dist`, `build`, `__pycache__`, `storybook-static`, `playwright-report`,
+`test-results`, and every hidden directory. The last three are there because
+tool-generated bundles are poison twice over: a minified file carries
+thousands of near-meaningless symbols (dwarfing the hand-written graph), and
+summarizing them is pure enrichment spend.
+
+Generated content under repo-specific names needs the same treatment, but
+per repository: `register --exclude` stores directory *basenames* to skip on
+top of the deny-list, and they stick for every subsequent walk — full
+re-ingests, hook-driven `--files` freshenings, and the docs phase:
+
+```sh
+docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
+  uv run python -m cartograph.ingest register --name myrepo --root /repos/myrepo \
+  --exclude _build-cloud generated-models
+```
+
+Excluding a directory that was already ingested deletes its nodes on the next
+run. Re-registering without `--exclude` keeps the stored list; passing
+`--exclude` with no values clears it.
+
 ### Enriching after ingest: summaries, then embeddings
 
 Ingest alone gives you structure — nodes and edges. Semantic search needs the

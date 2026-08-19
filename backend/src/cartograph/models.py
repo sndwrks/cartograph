@@ -59,6 +59,11 @@ class Repository(Base):
     name: Mapped[str] = mapped_column(Text, unique=True)
     root_path: Mapped[str] = mapped_column(Text)
     default_branch: Mapped[str] = mapped_column(Text, default="main")
+    # directory basenames pruned from every walk (ingest + docs enrich), on
+    # top of the built-in deny-list — set via `ingest register --exclude`
+    exclude_dirs: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default=text("'{}'")
+    )
     last_ingested_commit: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

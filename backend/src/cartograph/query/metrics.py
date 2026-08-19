@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from cartograph.models import Community, CommunityEdge, Edge, EdgeRel, Node, NodeKind
 
@@ -35,16 +36,23 @@ async def load_graph(
     )
     if not ids:
         return [], []
+    # filter endpoints by join, not id lists — asyncpg caps a statement at
+    # 32767 bind params, which a large repo's symbol count exceeds
+    src, dst = aliased(Node), aliased(Node)
     rows = await session.execute(
         select(Edge.src_id, Edge.dst_id)
+        .join(src, Edge.src_id == src.id)
+        .join(dst, Edge.dst_id == dst.id)
         .where(
             Edge.rel != EdgeRel.contains,
-            Edge.src_id.in_(ids),
-            Edge.dst_id.in_(ids),
+            src.repository_id == repository_id,
+            src.kind.in_(SYMBOL_KINDS),
+            dst.repository_id == repository_id,
+            dst.kind.in_(SYMBOL_KINDS),
         )
         .order_by(Edge.id)
     )
-    return ids, [(src, dst) for src, dst in rows.all()]
+    return ids, [(src_id, dst_id) for src_id, dst_id in rows.all()]
 
 
 async def write_node_metrics(session: AsyncSession, rows: list[dict]) -> None:

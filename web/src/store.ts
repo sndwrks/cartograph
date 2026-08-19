@@ -35,12 +35,9 @@ interface AppState {
   requestFocus: (id: number) => void;
 }
 
-const DEFAULT_REPO =
-  (import.meta.env.VITE_REPOS as string | undefined)?.split(",")[0]?.trim() ??
-  "py_sample";
-
 export const useAppStore = create<AppState>((set) => ({
-  repo: DEFAULT_REPO,
+  // null until TopBar picks the first name from the /repos response
+  repo: null,
   view: { mode: "overview" },
   selectedNodeId: null,
   hopDepth: 1,
@@ -58,11 +55,3 @@ export const useAppStore = create<AppState>((set) => ({
       focusRequest: { id, nonce: (state.focusRequest?.nonce ?? 0) + 1 },
     })),
 }));
-
-export function repoList(): string[] {
-  const raw = (import.meta.env.VITE_REPOS as string | undefined) ?? "py_sample";
-  return raw
-    .split(",")
-    .map((name) => name.trim())
-    .filter(Boolean);
-}
