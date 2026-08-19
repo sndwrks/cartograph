@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { fetchEgo, fetchNode, fetchRelatedKb } from "../api/client";
 import type { Confidence, EgoResponse } from "../api/types";
 import ConfidenceBadge from "./ConfidenceBadge";
+import KbTypeBadge from "./kb/KbTypeBadge";
 import KindBadge from "./KindBadge";
 import ThreadList from "./ThreadList";
 import { Close } from "./icons";
@@ -215,8 +216,11 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
         {relatedKb.data && relatedKb.data.terms.length > 0 ? (
           <ul className={styles.kbTerms}>
             {relatedKb.data.terms.map((term) => (
-              <li key={term.term} title={term.definition}>
-                <strong>{term.term}</strong>
+              <li key={term.id} title={term.definition}>
+                <KbTypeBadge type={term.type} />{" "}
+                <Link to={`/kb?sel=${term.id}`}>
+                  <strong>{term.term}</strong>
+                </Link>
                 <span className="muted"> — {term.definition}</span>
               </li>
             ))}

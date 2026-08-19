@@ -122,22 +122,69 @@ class SearchResult(BaseModel):
 
 class KBEntryOut(BaseModel):
     id: int
-    term: str
-    definition: str
+    type: str
+    slug: str
+    title: str
+    body: str
     aliases: list[str] | None
-    category: str | None  # acronym | domain | convention
+    payload: dict
+    status: str
+    review_note: str | None
+    seq: int | None
+    repository_id: int | None
+    #: The repository NAME. repository_id alone is useless to a client that
+    #: only ever knows names, which left the SPA guessing an entry's scope.
+    repository: str | None
+    source: str | None
+    created_by: str | None
+    created_at: datetime.datetime
     updated_at: datetime.datetime
 
+    # LEGACY, emitted so the SPA and existing clients keep working unchanged
+    # while the typed KB lands. Drop with the `category` column once the
+    # frontend has moved to type/title/body/payload.
+    term: str
+    definition: str
+    category: str | None
+
     @classmethod
-    def from_entry(cls, entry: KnowledgeEntry) -> KBEntryOut:
+    def from_entry(
+        cls, entry: KnowledgeEntry, repository: str | None = None
+    ) -> KBEntryOut:
         return cls(
             id=entry.id,
-            term=entry.term,
-            definition=entry.definition,
+            type=entry.type,
+            slug=entry.slug,
+            title=entry.title,
+            body=entry.body,
             aliases=entry.aliases,
-            category=entry.category,
+            payload=entry.payload or {},
+            status=entry.status,
+            review_note=entry.review_note,
+            seq=entry.seq,
+            repository_id=entry.repository_id,
+            repository=repository,
+            source=entry.source,
+            created_by=entry.created_by,
+            created_at=entry.created_at,
             updated_at=entry.updated_at,
+            term=entry.title,
+            definition=entry.body,
+            category=entry.category,
         )
+
+
+class KBTypeOut(BaseModel):
+    """Registry introspection — the endpoint that stops the SPA hard-coding
+    the five type names."""
+
+    name: str
+    label: str
+    lookup_keys: list[str]
+    assigns_seq: bool
+    export_dir: str | None
+    payload_schema: dict
+    payload_fields: dict[str, str]
 
 
 class AgentOut(BaseModel):

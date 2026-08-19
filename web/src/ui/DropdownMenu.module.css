@@ -1,0 +1,51 @@
+.content {
+  overflow: hidden;
+  min-width: 8rem; /* px→rem, no Radix content-width var for DropdownMenu like Select's trigger-width */
+  max-height: var(--radix-dropdown-menu-content-available-height);
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-dropdown);
+  padding: var(--space-1);
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 2rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  cursor: default;
+  user-select: none;
+  outline: none;
+}
+
+.item[data-highlighted] {
+  background: var(--color-hover);
+}
+
+.item[data-disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Same shaded danger treatment as Button's .danger text, without the fill/border
+   — a menu item stays text-only until highlighted. */
+.danger {
+  color: var(--color-warn);
+}
+
+.danger[data-highlighted] {
+  background: color-mix(in srgb, var(--color-warn) 12%, var(--color-surface));
+}
+
+.separator {
+  height: var(--border-width);
+  margin: var(--space-1) 0;
+  background: var(--color-rule);
+}

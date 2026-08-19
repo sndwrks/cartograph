@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, cast, func, literal, null, select
+from sqlalchemy import BigInteger, cast, func, literal, null, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cartograph.api.schemas import (
@@ -24,10 +24,26 @@ from cartograph.models import (
     NodeKind,
 )
 from cartograph.query.ingest import get_repository_by_name
+from cartograph.query.messages import UnknownRepositoryError
 
 MAX_NODES = 2500  # the client never receives more than ~2500 renderable nodes
 MAX_HOPS = 3
 MAX_DEPTH = 10
+CANDIDATE_CAP = 10
+
+
+class NodeNameNotFoundError(LookupError):
+    def __init__(self, qualified_name: str) -> None:
+        self.qualified_name = qualified_name
+        super().__init__(f"no node found for {qualified_name!r}")
+
+
+class AmbiguousNodeNameError(LookupError):
+    def __init__(self, qualified_name: str, candidates: list[Node]) -> None:
+        self.qualified_name = qualified_name
+        self.candidates = candidates
+        super().__init__(f"ambiguous name {qualified_name!r} — pass a qualified name")
+
 
 # trust order: resolved > llm_inferred > name_match
 _CONFIDENCE_ORDER = [
@@ -42,6 +58,55 @@ def _allowed_confidences(min_confidence: str | None) -> list[EdgeConfidence] | N
         return None
     floor = EdgeConfidence(min_confidence)
     return _CONFIDENCE_ORDER[: _CONFIDENCE_ORDER.index(floor) + 1]
+
+
+async def resolve_node_by_name(
+    session: AsyncSession, qualified_name: str, repo: str | None = None
+) -> Node:
+    """Resolve a qualified name to a node: exact qname, else unique bare name.
+
+    Raises NodeNameNotFoundError or AmbiguousNodeNameError (candidates
+    attached) rather than returning an error shape — that is a presentation
+    concern for the caller's transport, not this layer's.
+    """
+    repo_id = None
+    if repo is not None:
+        repository = await get_repository_by_name(session, repo)
+        if repository is None:
+            raise UnknownRepositoryError(repo)
+        repo_id = repository.id
+
+    def scoped(stmt):
+        stmt = stmt.where(Node.kind != NodeKind.file)
+        if repo_id is not None:
+            stmt = stmt.where(Node.repository_id == repo_id)
+        return stmt
+
+    exact = list(
+        (
+            await session.scalars(
+                scoped(select(Node).where(Node.qualified_name == qualified_name))
+                .order_by(Node.id)
+                .limit(CANDIDATE_CAP + 1)
+            )
+        ).all()
+    )
+    matches = exact
+    if not matches:
+        matches = list(
+            (
+                await session.scalars(
+                    scoped(select(Node).where(Node.name == qualified_name))
+                    .order_by(Node.pagerank.desc(), Node.id)
+                    .limit(CANDIDATE_CAP + 1)
+                )
+            ).all()
+        )
+    if not matches:
+        raise NodeNameNotFoundError(qualified_name)
+    if len(matches) > 1:
+        raise AmbiguousNodeNameError(qualified_name, matches[:CANDIDATE_CAP])
+    return matches[0]
 
 
 async def overview(session: AsyncSession, repo_name: str) -> dict | None:
@@ -295,9 +360,17 @@ async def impact(
 
 
 async def related_kb(
-    session: AsyncSession, node_id: int, limit: int = 5
+    session: AsyncSession,
+    node_id: int,
+    limit: int = 5,
+    types: tuple[str, ...] | None = None,
 ) -> list[dict] | None:
-    """KB entries nearest to the node's embedding; [] until enrichment ran."""
+    """KB entries nearest to the node's embedding; [] until enrichment ran.
+
+    This is the read surface that is easy to forget: without the `published`
+    filter an unreviewed proposal would surface in the graph side panel, which
+    is the one place a human would read it as established fact.
+    """
     from cartograph.models import KnowledgeEntry  # local: avoids widening imports
 
     node = await session.get(Node, node_id)
@@ -306,18 +379,34 @@ async def related_kb(
     if node.embedding is None:
         return []
     distance = KnowledgeEntry.embedding.cosine_distance(node.embedding)
-    rows = (
-        await session.execute(
-            select(KnowledgeEntry, (1 - distance).label("score"))
-            .where(KnowledgeEntry.embedding.is_not(None))
-            .order_by(distance)
-            .limit(limit)
+    stmt = (
+        select(KnowledgeEntry, (1 - distance).label("score"))
+        .where(
+            KnowledgeEntry.embedding.is_not(None),
+            KnowledgeEntry.status == "published",
+            # global entries, plus this node's own repository — derived from
+            # the Node already loaded, so no extra query
+            or_(
+                KnowledgeEntry.repository_id.is_(None),
+                KnowledgeEntry.repository_id == node.repository_id,
+            ),
         )
-    ).all()
+        .order_by(distance)
+        .limit(limit)
+    )
+    if types:
+        stmt = stmt.where(KnowledgeEntry.type.in_(types))
+    rows = (await session.execute(stmt)).all()
     return [
         {
-            "term": entry.term,
-            "definition": entry.definition,
+            "id": entry.id,
+            "type": entry.type,
+            "slug": entry.slug,
+            "title": entry.title,
+            "body": entry.body,
+            # legacy aliases, so the SPA keeps working until it moves over
+            "term": entry.title,
+            "definition": entry.body,
             "category": entry.category,
             "score": score,
         }

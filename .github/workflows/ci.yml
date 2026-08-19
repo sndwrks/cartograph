@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+# No `paths:` filters: these jobs are meant to be required status checks, and a
+# path-filtered job that never runs stays permanently "expected" and blocks the PR.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web (lint, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # matches web/Dockerfile and the dev compose override; the repo pins
+          # no .nvmrc and declares no engines field
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      # cheapest first
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      # `tsc -b && vite build` — this is where typechecking happens; there is no
+      # separate typecheck script
+      - name: Typecheck and build
+        run: npm run build
+
+  backend-unit:
+    name: backend unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      # uv provisions the Python 3.14 that pyproject requires; the `dev` group
+      # (pytest, pytest-asyncio, httpx) is synced by default
+      - run: uv sync --frozen
+
+      # No services and no env vars: this lane must not touch a database. Tests
+      # are marked `integration` automatically by fixture closure — see
+      # tests/conftest.py. An empty selection exits 5 and fails the job.
+      - name: Unit tests
+        run: uv run pytest -m "not integration"
+
+  backend-integration:
+    name: backend integration
+    # gate: the slow DB lane only starts once the fast lane is green
+    needs: backend-unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      db:
+        # pgvector, not stock postgres: the initial migration runs
+        # CREATE EXTENSION vector / pg_trgm and builds two HNSW indexes
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: cartograph
+          POSTGRES_PASSWORD: cartograph
+          POSTGRES_DB: cartograph
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cartograph"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Set explicitly: the default baked into tests/conftest.py still carries the
+      # pre-rename `codegraph` role and would fail to authenticate here. The suite
+      # creates cartograph_test itself, and test_migration.py creates a second
+      # throwaway database — both need the superuser role the service provides.
+      TEST_DATABASE_URL: postgresql+asyncpg://cartograph:cartograph@127.0.0.1:5432/cartograph_test
+      # ANTHROPIC_API_KEY / VOYAGE_API_KEY are deliberately unset. The enrichment
+      # suite injects fakes (tests/enrich/fakes.py), and a real VOYAGE_API_KEY would
+      # send kb_lookup's tier-3 vector path to the live API — billable, and silent,
+      # because that path swallows its own failures.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      # uv must stay on PATH: the session-scoped test_engine fixture shells out to
+      # `uv run alembic upgrade head` to build the schema
+      - run: uv sync --frozen
+
+      # CI is set by GitHub Actions, which makes an unreachable database raise
+      # instead of skip (tests/conftest.py) — otherwise this job could report green
+      # having tested nothing.
+      - name: Integration tests
+        run: uv run pytest -m integration

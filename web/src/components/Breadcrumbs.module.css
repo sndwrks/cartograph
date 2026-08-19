@@ -6,6 +6,13 @@
   font-size: var(--text-sm);
 }
 
+/* The trail carries the wordmark's accent (--color-accent-text), not the
+   global link accent — the crumbs read as part of the chrome, like .title in
+   TopBar. Current crumb included; hover underline still marks the links. */
+.breadcrumbs a {
+  color: var(--color-accent-text);
+}
+
 .breadcrumbs a:hover {
   text-decoration: underline;
 }
@@ -16,5 +23,5 @@
 }
 
 .crumbCurrent {
-  color: var(--color-text);
+  color: var(--color-accent-text);
 }

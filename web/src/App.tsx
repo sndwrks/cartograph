@@ -17,6 +17,9 @@ import { TooltipProvider } from "./ui";
 import BoardView from "./views/BoardView";
 import CommunityView from "./views/CommunityView";
 import EgoView from "./views/EgoView";
+import KbEditorView from "./views/KbEditorView";
+import KbReviewView from "./views/KbReviewView";
+import KbView from "./views/KbView";
 import Overview from "./views/Overview";
 
 const queryClient = new QueryClient({
@@ -43,13 +46,17 @@ function RouteSync() {
   return null;
 }
 
-// The side panel is a fixed sibling of the canvas inside the workspace grid,
-// used only by the graph routes (it shows god nodes / node detail). The
-// board is a full-width page, so it's gated out on that route rather than
-// rendered empty — with it absent, .workspace's `auto` track just collapses.
+// The side panel is a fixed sibling of the canvas inside the workspace grid and
+// belongs to the GRAPH routes only — it renders god nodes or node detail, which
+// mean nothing anywhere else. An allowlist rather than a "not /board" denylist:
+// the denylist was right with one full-width page, went wrong at the second,
+// and rendered an empty panel on any unmatched URL. With the panel absent,
+// .workspace's `auto` track just collapses.
+const GRAPH_ROUTE = /^\/(graph|c\/\d+|n\/\d+)$/;
+
 function Workspace() {
   const { pathname } = useLocation();
-  const showSidePanel = pathname !== "/board";
+  const showSidePanel = GRAPH_ROUTE.test(pathname);
 
   return (
     <div className={styles.workspace}>
@@ -62,6 +69,12 @@ function Workspace() {
           <Route path="/c/:communityId" element={<CommunityView />} />
           <Route path="/n/:nodeId" element={<EgoView />} />
           <Route path="/board" element={<BoardView />} />
+          {/* Selection lives in ?sel=, not a path segment: the index and the
+              detail share one fetch, and this way it deep-links. */}
+          <Route path="/kb" element={<KbView />} />
+          <Route path="/kb/review" element={<KbReviewView />} />
+          <Route path="/kb/new" element={<KbEditorView />} />
+          <Route path="/kb/:entryId/edit" element={<KbEditorView />} />
         </Routes>
       </main>
       {showSidePanel && <SidePanel />}

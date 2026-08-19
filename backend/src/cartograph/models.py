@@ -216,20 +216,72 @@ class AgentMessage(Base):
 
 
 class KnowledgeEntry(Base):
+    """A typed knowledge-base entry (slice 15).
+
+    `type` is a key into `cartograph.kb.types.REGISTRY` and is deliberately
+    `Text`, not `sa.Enum`: adding a type must never require an `ALTER TYPE`
+    (and see the enum name-vs-value gotcha above). Validation happens in
+    `query/kb.py` against the registry.
+    """
+
     __tablename__ = "knowledge_base"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    term: Mapped[str] = mapped_column(Text)          # "PSN"
-    definition: Mapped[str] = mapped_column(Text)    # "PositageNet — never any other expansion"
+    type: Mapped[str] = mapped_column(Text)          # registry key
+    slug: Mapped[str] = mapped_column(Text)          # identity + export filename stem
+    title: Mapped[str] = mapped_column(Text)         # was: term — "PSN"
+    body: Mapped[str] = mapped_column(Text)          # was: definition
     aliases: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text))
-    category: Mapped[Optional[str]] = mapped_column(Text)  # acronym | domain | convention
+    payload: Mapped[dict] = mapped_column(
+        JSONB, server_default=text("'{}'::jsonb"), default=dict
+    )
+    status: Mapped[str] = mapped_column(
+        Text, server_default=text("'published'"), default="published"
+    )  # proposed | published | rejected | archived
+    review_note: Mapped[Optional[str]] = mapped_column(Text)  # the human's reason on reject
+    seq: Mapped[Optional[int]] = mapped_column(Integer)  # ADR number; NULL when unnumbered
+    repository_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("repositories.id", ondelete="CASCADE"), index=True
+    )  # NULL = global, visible to every repo
+    # LEGACY glossary sub-tag (acronym | domain | convention), superseded by
+    # `type`. Kept so ?category= and RelatedKbTerm keep working; drop once the
+    # SPA has moved to type/title/body/payload.
+    category: Mapped[Optional[str]] = mapped_column(Text)
+    source: Mapped[Optional[str]] = mapped_column(Text)  # api | mcp | cli | seed | legacy
+    created_by: Mapped[Optional[str]] = mapped_column(Text)  # "human:john" | "agent:<name>"
     embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(EMBED_DIM))
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     __table_args__ = (
-        Index("ix_kb_term_lower", func.lower(text("term")), unique=True),
+        # Identity, and the direct descendant of the old ix_kb_term_lower.
+        # coalesce(repository_id, 0) rather than the bare column because a
+        # plain multi-column unique index treats NULLs as distinct, which
+        # would let two global "PSN" rows coexist.
+        Index(
+            "ix_kb_ident",
+            text("coalesce(repository_id, 0)"), text("type"), text("lower(slug)"),
+            unique=True, postgresql_where=text("status = 'published'"),
+        ),
+        # THE DETERMINISM GUARANTEE. Within type='glossary' and
+        # repository_id IS NULL this is exactly the old ix_kb_term_lower, which
+        # is what keeps the PSN contract intact. Partial on `published` so an
+        # agent can propose a competing definition; the 409 moves to publish.
+        Index(
+            "ix_kb_title_lower",
+            text("coalesce(repository_id, 0)"), text("type"), text("lower(title)"),
+            unique=True, postgresql_where=text("status = 'published'"),
+        ),
+        Index(
+            "ix_kb_seq",
+            text("coalesce(repository_id, 0)"), text("type"), "seq",
+            unique=True, postgresql_where=text("seq IS NOT NULL"),
+        ),
+        Index("ix_kb_type_status", "type", "status"),
         Index("ix_kb_embedding_hnsw", "embedding",
               postgresql_using="hnsw",
               postgresql_ops={"embedding": "vector_cosine_ops"}),

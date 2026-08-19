@@ -1,4 +1,9 @@
+import datetime
+
 import pytest
+from sqlalchemy import func, select
+
+from cartograph.models import Node, NodeKind
 
 
 @pytest.fixture
@@ -85,3 +90,99 @@ async def test_read_and_delete(client, agent):
     assert (await client.get(f"/api/v1/messages/{m['id']}")).status_code == 200
     assert (await client.delete(f"/api/v1/messages/{m['id']}")).status_code == 204
     assert (await client.get(f"/api/v1/messages/{m['id']}")).status_code == 404
+
+
+async def test_node_qualified_name_resolves_on_post_and_get(client, agent, seeded):
+    posted = await post_message(
+        client, agent, "x", node_qualified_name="app.util.helper"
+    )
+    assert posted["node_id"] == seeded.helper.id
+
+    r = await client.get(
+        "/api/v1/messages", params={"node_qualified_name": "app.util.helper"}
+    )
+    bodies = {t["message"]["body"] for t in r.json()["threads"]}
+    assert "x" in bodies
+
+
+async def test_node_qualified_name_matching_nothing_is_404(client, agent):
+    r = await client.post(
+        "/api/v1/messages",
+        json={
+            "agent_id": agent["id"],
+            "body": "x",
+            "node_qualified_name": "does.not.Exist",
+        },
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"] == "no node found for 'does.not.Exist'"
+
+
+async def test_ambiguous_bare_name_is_409_with_candidates(client, agent, seeded, session):
+    session.add(
+        Node(
+            repository_id=seeded.repo.id,
+            kind=NodeKind.function,
+            name="helper",
+            qualified_name="app.other.helper",
+        )
+    )
+    await session.flush()
+
+    r = await client.post(
+        "/api/v1/messages",
+        json={"agent_id": agent["id"], "body": "x", "node_qualified_name": "helper"},
+    )
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert "app.util.helper" in detail
+    assert "app.other.helper" in detail
+
+
+async def test_both_node_id_and_qualified_name_is_422_on_post(client, agent, seeded):
+    r = await client.post(
+        "/api/v1/messages",
+        json={
+            "agent_id": agent["id"],
+            "body": "x",
+            "node_id": seeded.helper.id,
+            "node_qualified_name": "app.util.helper",
+        },
+    )
+    assert r.status_code == 422
+
+
+async def test_both_node_id_and_qualified_name_is_422_on_get(client, seeded):
+    r = await client.get(
+        "/api/v1/messages",
+        params={"node_id": seeded.helper.id, "node_qualified_name": "app.util.helper"},
+    )
+    assert r.status_code == 422
+
+
+async def test_undeclared_body_key_is_422_not_201(client, agent):
+    r = await client.post(
+        "/api/v1/messages",
+        json={"agent_id": agent["id"], "body": "x", "node_name": "app.util.helper"},
+    )
+    assert r.status_code == 422
+
+
+async def test_unknown_query_param_is_422_naming_the_key(client):
+    r = await client.get("/api/v1/messages", params={"nod_id": 5})
+    assert r.status_code == 422
+    assert "nod_id" in r.json()["detail"]
+
+
+async def test_since_filters_the_list(client, agent, session):
+    await post_message(client, agent, "old news")
+    now = await session.scalar(select(func.now()))
+
+    past = (now - datetime.timedelta(hours=1)).isoformat()
+    future = (now + datetime.timedelta(hours=1)).isoformat()
+
+    r_past = await client.get("/api/v1/messages", params={"since": past})
+    assert len(r_past.json()["threads"]) == 1
+
+    r_future = await client.get("/api/v1/messages", params={"since": future})
+    assert r_future.json()["threads"] == []

@@ -15,8 +15,17 @@
   font-size: 0.6875rem; /* 11px */
 }
 
+.rootRow {
+  /* Anchors .menuCell, which overlays the top-right corner instead of
+     sitting beside the card as a flex sibling — the card needs the full
+     row width, and .root is itself a <button> so the trigger can't nest
+     inside it. */
+  position: relative;
+}
+
 .root {
   width: 100%;
+  min-width: 0;
   background: var(--color-surface-sunken);
   border: var(--border);
   border-radius: var(--radius);
@@ -28,15 +37,43 @@
   font-size: var(--text-xs);
 }
 
-.message + .message {
+.menuCell {
+  /* Small inset so the trigger lines up with .meta's timestamp baseline
+     rather than the card's outer edge. */
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+}
+
+.messageRow {
+  /* Same overlay anchoring as .rootRow, for the reply's own menu cell. */
+  position: relative;
+}
+
+.messageRow + .messageRow {
   margin-top: var(--space-2);
   padding-top: var(--space-2);
   border-top: var(--border);
 }
 
+.error {
+  /* Sits under the menu trigger inside .menuCell, which floats over the
+     card — needs its own background to stay legible over the card's fill. */
+  margin: 0.125rem 0 0; /* 2px */
+  padding: var(--space-1);
+  background: var(--color-surface-raised);
+  border: var(--border);
+  border-radius: var(--radius);
+  color: var(--color-warn);
+  font-size: 0.6875rem; /* 11px */
+}
+
 .meta {
   display: flex;
   justify-content: space-between;
+  /* Clears .menuCell's trigger, which overlays this row's right edge —
+     both .root and reply messages use .meta, and both get the overlay. */
+  padding-right: 2rem; /* 32px — iconSm trigger + its inset */
   font-size: 0.6875rem; /* 11px */
   margin-bottom: 0.125rem; /* 2px */
 }

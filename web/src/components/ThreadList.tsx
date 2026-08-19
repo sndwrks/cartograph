@@ -1,11 +1,85 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { fetchAgents, fetchNode, fetchThread, fetchThreads } from "../api/client";
+import {
+  deleteMessage,
+  fetchAgents,
+  fetchNode,
+  fetchThread,
+  fetchThreads,
+} from "../api/client";
 import type { MessageOut, ThreadRootOut } from "../api/types";
-import { cx } from "../ui";
+import {
+  Button,
+  cx,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui";
+import { Ellipsis } from "./icons";
 import styles from "./ThreadList.module.css";
+
+// Every board query key is prefixed ["messages", …], so one invalidate after a
+// delete refreshes the thread list and any expanded thread's replies — same
+// precedent as the KB's ["kb", …] prefix (KbEntryDetail.tsx).
+function invalidateMessages(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["messages"] });
+}
+
+/** Three-dot menu + native confirm() for one message row. Owns its own
+ *  mutation so an error or pending state on one row never affects its
+ *  siblings. Rendered as an overlay positioned by the caller, never nested
+ *  inside `.root` — that element is itself a `<button>`, and a trigger can't
+ *  nest inside another interactive element. */
+function MessageMenu({
+  messageId,
+  confirmText,
+  triggerLabel,
+}: {
+  messageId: number;
+  confirmText: string;
+  triggerLabel: string;
+}) {
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: deleteMessage,
+    onSuccess: () => invalidateMessages(queryClient),
+  });
+  return (
+    <div className={styles.menuCell}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="iconSm" title={triggerLabel} aria-label={triggerLabel}>
+            <Ellipsis />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem
+            variant="danger"
+            disabled={remove.isPending}
+            onSelect={() => {
+              if (confirm(confirmText)) remove.mutate(messageId);
+            }}
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {remove.isError && <p className={styles.error}>{String(remove.error)}</p>}
+    </div>
+  );
+}
+
+// Never a fixed string: the confirm must show what actually goes with the
+// root — a cascading delete (thread_id is ondelete CASCADE) with no warning
+// of the blast radius is how a human loses replies by accident.
+function rootConfirmText(subject: string | null, replyCount: number): string {
+  const label = subject ? `“${subject}”` : "this thread";
+  if (replyCount === 0) return `Delete ${label}? This cannot be undone.`;
+  return `Delete ${label} and its ${replyCount} repl${replyCount === 1 ? "y" : "ies"}? This cannot be undone.`;
+}
 
 function relativeTime(iso: string): string {
   const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -44,20 +118,32 @@ function Thread({
   agentNames: Map<number, string>;
 }) {
   const query = useQuery({
-    queryKey: ["thread", rootId],
+    queryKey: ["messages", "thread", rootId],
     queryFn: () => fetchThread(rootId),
     staleTime: 30_000,
   });
   if (query.isPending) return <p className="muted">Loading thread…</p>;
   if (query.isError) return <p className="muted">Failed to load thread.</p>;
+  // list_thread returns [root, ...replies] — the root is already shown (with
+  // its own cascade-aware delete menu) in the collapsed row above, so only
+  // the true replies get a delete affordance here. Giving the duplicated root
+  // the singular "delete this reply" wording would understate what its
+  // ondelete="CASCADE" actually does.
+  const replies = query.data.messages.filter((message) => message.id !== rootId);
   return (
     <div className={styles.thread}>
-      {query.data.messages.map((message) => (
-        <Message
-          key={message.id}
-          message={message}
-          agentName={agentNames.get(message.agent_id) ?? `#${message.agent_id}`}
-        />
+      {replies.map((message) => (
+        <div key={message.id} className={styles.messageRow}>
+          <Message
+            message={message}
+            agentName={agentNames.get(message.agent_id) ?? `#${message.agent_id}`}
+          />
+          <MessageMenu
+            messageId={message.id}
+            confirmText="Delete this reply? This cannot be undone."
+            triggerLabel="Reply actions"
+          />
+        </div>
       ))}
     </div>
   );
@@ -76,7 +162,7 @@ export default function ThreadList({
 }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const threads = useQuery({
-    queryKey: ["threads", nodeId ?? null, agentId ?? null, repo ?? null],
+    queryKey: ["messages", "threads", nodeId ?? null, agentId ?? null, repo ?? null],
     queryFn: () => fetchThreads({ nodeId, agentId, repo }),
     staleTime: 30_000,
   });
@@ -126,8 +212,8 @@ export default function ThreadList({
     return (
       <p className="muted">
         {nodeId === undefined
-          ? "No discussion yet. Agents post to the board via MCP (the SPA is read-only)."
-          : "No discussion. Agents can anchor threads here via MCP (the SPA is read-only)."}
+          ? "No discussion yet. Agents post to the board via MCP."
+          : "No discussion. Agents can anchor threads here via MCP."}
       </p>
     );
   }
@@ -141,24 +227,31 @@ export default function ThreadList({
               {anchorNames.get(message.node_id) ?? `#${message.node_id}`}
             </Link>
           )}
-          <button
-            type="button"
-            className={styles.root}
-            onClick={() =>
-              setExpanded(expanded === message.id ? null : message.id)
-            }
-          >
-            <Message
-              message={message}
-              agentName={
-                agentNames.get(message.agent_id) ?? `#${message.agent_id}`
+          <div className={styles.rootRow}>
+            <button
+              type="button"
+              className={styles.root}
+              onClick={() =>
+                setExpanded(expanded === message.id ? null : message.id)
               }
+            >
+              <Message
+                message={message}
+                agentName={
+                  agentNames.get(message.agent_id) ?? `#${message.agent_id}`
+                }
+              />
+              <span className={cx(styles.replies, "muted")}>
+                {reply_count} repl{reply_count === 1 ? "y" : "ies"}
+                {expanded === message.id ? " ▾" : " ▸"}
+              </span>
+            </button>
+            <MessageMenu
+              messageId={message.id}
+              confirmText={rootConfirmText(message.subject, reply_count)}
+              triggerLabel="Thread actions"
             />
-            <span className={cx(styles.replies, "muted")}>
-              {reply_count} repl{reply_count === 1 ? "y" : "ies"}
-              {expanded === message.id ? " ▾" : " ▸"}
-            </span>
-          </button>
+          </div>
           {expanded === message.id && (
             <Thread rootId={message.id} agentNames={agentNames} />
           )}

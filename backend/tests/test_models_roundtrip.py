@@ -123,8 +123,10 @@ async def test_agent_and_message_roundtrip(session: AsyncSession) -> None:
 
 async def test_knowledge_entry_roundtrip(session: AsyncSession) -> None:
     entry = KnowledgeEntry(
-        term="PSN",
-        definition="PositageNet — never any other expansion",
+        type="glossary",
+        slug="psn",
+        title="PSN",
+        body="PositageNet — never any other expansion",
         aliases=["positage", "positagenet"],
         category="acronym",
         embedding=[0.2] * EMBED_DIM,
@@ -132,10 +134,21 @@ async def test_knowledge_entry_roundtrip(session: AsyncSession) -> None:
     session.add(entry)
     await session.flush()
     got = (await session.execute(
-        select(KnowledgeEntry).where(KnowledgeEntry.term == "PSN")
+        select(KnowledgeEntry).where(KnowledgeEntry.title == "PSN")
     )).scalar_one()
     assert got.aliases == ["positage", "positagenet"]
     assert got.embedding is not None and len(got.embedding) == EMBED_DIM
+
+
+async def test_knowledge_entry_defaults(session: AsyncSession) -> None:
+    entry = KnowledgeEntry(type="glossary", slug="ddd", title="DDD", body="…")
+    session.add(entry)
+    await session.flush()
+    await session.refresh(entry)
+    assert entry.payload == {}
+    assert entry.status == "published"
+    assert entry.created_at is not None
+    assert entry.seq is None and entry.repository_id is None
 
 
 async def test_ingest_run_roundtrip(session: AsyncSession) -> None:

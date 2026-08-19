@@ -1,6 +1,8 @@
 # Cartograph — Implementation Slices
 
-This folder decomposes [`initial-spec.md`](initial-spec.md) into 14 implementation slices, each sized for a single focused implementation session. Implement them in numeric order unless the dependency notes say otherwise; every slice's **Acceptance criteria** must pass before starting the next.
+This folder decomposes [`initial-spec.md`](initial-spec.md) into 19 implementation slices, each sized for a single focused implementation session. Implement them in numeric order unless the dependency notes say otherwise; every slice's **Acceptance criteria** must pass before starting the next.
+
+Slices 01–14 build the system the initial spec describes. Slices 15–18 extend the knowledge base past it: a typed entry model, an agent-propose/human-publish workflow, and Markdown export. Slice 19 repairs the board: anchoring by qualified name over REST, refusing input the API does not understand instead of ignoring it, and a delete button for the cleanup only a human is allowed to do.
 
 ## How to work a slice
 
@@ -27,8 +29,13 @@ This folder decomposes [`initial-spec.md`](initial-spec.md) into 14 implementati
 | [12](slice-12-spa-side-panel.md) | SPA side panel | M3 | 11 |
 | [13](slice-13-tier3-enrichment.md) | Tier-3 enrichment & hybrid search | M4 | 07, 08 |
 | [14](slice-14-agent-board-incrementals.md) | Agent message board via MCP + git-hook incrementals | M5 | 09, 12, 13 |
+| [15](slice-15-typed-kb-data-model.md) | Typed KB data model & registry | M6 | 08, 13 |
+| [16](slice-16-kb-propose-and-review.md) | KB propose & review | M6 | 15 (09) |
+| [17](slice-17-kb-markdown-export.md) | KB Markdown export | M6 | 15 |
+| [18](slice-18-spa-kb-page.md) | SPA knowledge-base page | M6 | 15, 16 (12) |
+| [19](slice-19-board-anchoring-and-deletion.md) | Board anchoring by name & message deletion | M7 | 08, 09, 14, 18 |
 
-Slices 03/04 are DB-free and can be built in parallel with 02. Slices 10–12 (SPA) can proceed in parallel with 08/09 once 07 is done.
+Slices 03/04 are DB-free and can be built in parallel with 02. Slices 10–12 (SPA) can proceed in parallel with 08/09 once 07 is done. Slices 16–18 all depend on 15 and on nothing else in the group, so they can run in parallel once it lands.
 
 ## Repository layout (established by slice 01)
 
@@ -51,6 +58,7 @@ code-graph/
 │   │   ├── config.py          # settings from env (pydantic-settings)
 │   │   ├── models.py          # SQLAlchemy 2.0 models (slice 02)
 │   │   ├── db.py              # async engine / session factory
+│   │   ├── kb/                # KB type registry (DB-free) + export CLI (15/17)
 │   │   ├── query/             # shared query layer — the ONLY place SQL lives
 │   │   ├── extractors/        # base.py, resolve.py, python.py, typescript.py
 │   │   ├── ingest/            # CLI: python -m cartograph.ingest
@@ -70,6 +78,8 @@ code-graph/
 - **Async everywhere in the backend.** SQLAlchemy 2.0 async (`asyncpg` driver), fully typed declarative models, FastAPI async endpoints.
 - **SQL lives only in `cartograph/query/`.** API routers and MCP tools are thin wrappers over the same query functions. If a slice needs a new query, it adds a function there.
 - **Confidence is sacred.** Every edge carries `resolved` | `llm_inferred` | `name_match`, and every API/MCP response that returns edges includes the tag. Trust ordering: `resolved` > `llm_inferred` > `name_match`.
+- **KB lookup determinism is sacred** (slice 08 §1, extended by slice 15). Exact then alias then vector, in that order; the first two tiers are pure indexed SQL and only ever gain conjunctive filters. `{match, results}` is the frozen top level of every lookup response — new fields go inside a result object, never beside it.
+- **KB entry types are code, not data.** `cartograph/kb/types/` owns each type's fields, lookup keys, embed text and export rendering; adding a type is a module plus a registry line, never a migration. `kb/types`, `kb/slug` and `kb/views` stay DB-free so they are testable without Postgres; `kb/export` reads entries but still goes through `query/kb.py`.
 - **`EMBED_DIM = 1024`** (Voyage `voyage-code-3`). Defined once in `models.py`; never hardcode 1024 elsewhere.
 - **The db service never publishes a port.** All access goes through the API or MCP. Ad-hoc SQL: `docker compose exec db psql -U cartograph`.
 - **Secrets** come from `.env` (gitignored). `.env.example` documents every variable; never commit real values.
@@ -83,3 +93,5 @@ code-graph/
 - **M3 (10–12):** SPA overview, drill-in, ego, Cmd+K search, side panel.
 - **M4 (13):** tier-3 summaries/embeddings/community labels; hybrid search on.
 - **M5 (14):** agent message board end to end, git-hook incremental ingestion.
+- **M6 (15–18):** typed knowledge base — five entry types behind a code registry, agents propose and humans publish, Markdown export, and a `/kb` page in the SPA. (`initial-spec.md` §9 also floats an optional tier-2 LSP milestone; it is unrelated to this group and has no slice.)
+- **M7 (19):** the board is trustworthy — a claim anchors by qualified name over REST as well as MCP, an unrecognised field or query parameter is refused rather than ignored, and a human can delete a message from the SPA.

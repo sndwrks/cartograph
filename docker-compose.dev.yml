@@ -8,6 +8,11 @@ services:
   api:
     volumes:
       - ./backend/src:/app/src
+      # Migrations too, not just source: the command below runs `alembic
+      # upgrade head` on every start, and without this mount it resolves head
+      # against the image's baked-in versions/ — so a migration added on the
+      # host silently never runs and the schema drifts from the models.
+      - ./backend/alembic:/app/alembic
     entrypoint: []
     command:
       [

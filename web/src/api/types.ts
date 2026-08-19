@@ -122,3 +122,60 @@ export interface AgentOut {
   role: string | null;
   status: string;
 }
+
+// --- knowledge base (slices 15/16) ---
+
+export type KbTypeName =
+  | "glossary"
+  | "convention"
+  | "decision"
+  | "specification"
+  | "runbook";
+
+export type KbStatus = "proposed" | "published" | "rejected" | "archived";
+
+export interface KbEntryOut {
+  id: number;
+  type: string; // not KbTypeName: a backend type the SPA doesn't know yet
+  slug: string;
+  title: string;
+  body: string;
+  aliases: string[] | null;
+  payload: Record<string, unknown>;
+  status: KbStatus;
+  review_note: string | null;
+  seq: number | null;
+  repository_id: number | null;
+  repository: string | null; // the repo NAME, or null for global
+  source: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  // legacy aliases the backend still emits; prefer title/body/type
+  term: string;
+  definition: string;
+  category: string | null;
+}
+
+export interface KbTypeOut {
+  name: string;
+  label: string;
+  lookup_keys: string[];
+  assigns_seq: boolean;
+  export_dir: string | null;
+  payload_schema: Record<string, unknown>;
+  payload_fields: Record<string, string>;
+}
+
+/** A KB entry near a node's embedding. Lives here, not inline in client.ts. */
+export interface RelatedKbTerm {
+  id: number;
+  type: string;
+  slug: string;
+  title: string;
+  body: string;
+  term: string;
+  definition: string;
+  category: string | null;
+  score: number;
+}

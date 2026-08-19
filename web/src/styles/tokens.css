@@ -201,6 +201,18 @@
   --graph-confidence-name: #8c8590;
   --graph-ring: #e9e4ed;
 
+  /* ───────── KB entry types ─────────
+     Deliberately NOT in the --graph-* namespace: theme.ts validates that one
+     as 6-digit hex for canvas alpha-suffixing, and these never reach a canvas.
+     Aliases of theme-invariant primitives, so the dark block needs no copy. */
+  --kb-type-glossary: var(--color-brand-purple-light);
+  --kb-type-specification: var(--color-info);
+  --kb-type-decision: var(--color-caution);
+  --kb-type-convention: var(--color-good);
+  --kb-type-runbook: var(--color-grey-500);
+  /* a type the SPA does not know about yet still has to render */
+  --kb-type-unknown: var(--color-grey-600);
+
   /* ═════════ Semantic aliases — LIGHT (default) ═════════ */
   --color-bg: var(--color-grey-100);
   --color-surface: var(--color-surface-white);

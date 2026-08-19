@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="120" height="120">
+  <title>Cartograph</title>
+  <!--
+    The Cartograph graph mark, kept in sync with web/src/components/Logo.tsx:
+    one hub, five satellites of varying size, spokes drawn center-to-center
+    as plain lines with filled circles painted over the endpoints. Color is a
+    literal (the brand purple, mid enough to read on both GitHub themes)
+    because GitHub does not honor prefers-color-scheme CSS inside embedded
+    SVGs.
+  -->
+  <path fill="none" stroke="#8b5cf6" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" d="M11.5 12L4.5 5M11.5 12L18 4.5M11.5 12L20.5 14.5M11.5 12L6 19.5M11.5 12L14.5 20.5"/>
+  <g fill="#8b5cf6">
+    <circle cx="11.5" cy="12" r="2.5"/>
+    <circle cx="4.5" cy="5" r="2.2"/>
+    <circle cx="18" cy="4.5" r="1.7"/>
+    <circle cx="20.5" cy="14.5" r="2"/>
+    <circle cx="6" cy="19.5" r="1.6"/>
+    <circle cx="14.5" cy="20.5" r="1.9"/>
+  </g>
+</svg>
