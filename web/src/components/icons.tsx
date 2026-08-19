@@ -35,6 +35,16 @@ export function Gear(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function Ellipsis(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} viewBox="0 0 16 16" fill="currentColor" stroke="none" {...props}>
+      <circle cx="3" cy="8" r="1.5" />
+      <circle cx="8" cy="8" r="1.5" />
+      <circle cx="13" cy="8" r="1.5" />
+    </svg>
+  );
+}
+
 export function Close(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} viewBox="0 0 16 16" strokeWidth={1.5} {...props}>

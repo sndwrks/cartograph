@@ -59,6 +59,12 @@
 .row {
   cursor: pointer;
   border: var(--border-width) solid transparent;
+  /* Persistent hairline under each row, layered on top of the transparent
+     border above: only the bottom edge is colored at rest, so it doesn't
+     read as a box. Hover's `border-color: var(--color-rule)` below sets all
+     four sides to this same color, so the bottom edge doesn't visibly
+     change — no fight between the two rules. */
+  border-bottom-color: var(--color-rule);
   border-radius: var(--radius);
   padding: var(--space-2);
 }

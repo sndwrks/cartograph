@@ -53,7 +53,8 @@
   overflow: auto;
   min-height: 0;
   border-right: var(--border);
-  padding: var(--space-2) 0;
+  /* No top padding: the first group heading's own 1rem padding sets the gap. */
+  padding: 0 0 var(--space-2);
 }
 
 .detailPane {

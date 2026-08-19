@@ -3,7 +3,15 @@ import { useNavigate } from "react-router-dom";
 
 import { archiveKbEntry, deleteKbEntry } from "../../api/client";
 import type { KbEntryOut } from "../../api/types";
-import { Badge, Button } from "../../ui";
+import {
+  Badge,
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../ui";
+import { Ellipsis } from "../icons";
 import KbStatusBadge from "./KbStatusBadge";
 import KbTypeBadge from "./KbTypeBadge";
 import { payloadRenderer } from "./payloads";
@@ -43,35 +51,40 @@ export default function KbEntryDetail({ entry }: { entry: KbEntryOut | null }) {
           <KbStatusBadge status={entry.status} />
         </div>
         <div className={styles.actions}>
-          {/* Button is a plain <button>, not a Radix Slot — it has no asChild,
-              so navigation goes through the router hook rather than a nested
-              <Link>. */}
-          <Button variant="ghost" onClick={() => navigate(`/kb/${entry.id}/edit`)}>
-            Edit
-          </Button>
-          {/* Archiving is the only way back from a published entry, and until
-              this existed the `archived` status was unreachable from the UI —
-              so the badge that renders it could never have been seen. */}
-          {entry.status === "published" && (
-            <Button
-              variant="ghost"
-              disabled={archive.isPending}
-              onClick={() => archive.mutate(entry.id)}
-            >
-              Archive
-            </Button>
-          )}
-          <Button
-            variant="danger"
-            disabled={remove.isPending}
-            onClick={() => {
-              if (confirm(`Delete “${entry.title}” permanently?`)) {
-                remove.mutate(entry.id);
-              }
-            }}
-          >
-            Delete
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="iconSm" aria-label="More actions" title="More actions">
+                <Ellipsis />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onSelect={() => navigate(`/kb/${entry.id}/edit`)}>
+                Edit
+              </DropdownMenuItem>
+              {/* Archiving is the only way back from a published entry, and until
+                  this existed the `archived` status was unreachable from the UI —
+                  so the badge that renders it could never have been seen. */}
+              {entry.status === "published" && (
+                <DropdownMenuItem
+                  disabled={archive.isPending}
+                  onSelect={() => archive.mutate(entry.id)}
+                >
+                  Archive
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                variant="danger"
+                disabled={remove.isPending}
+                onSelect={() => {
+                  if (confirm(`Delete “${entry.title}” permanently?`)) {
+                    remove.mutate(entry.id);
+                  }
+                }}
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 

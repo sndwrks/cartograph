@@ -10,8 +10,15 @@ import {
   fetchThreads,
 } from "../api/client";
 import type { MessageOut, ThreadRootOut } from "../api/types";
-import { Button, cx } from "../ui";
-import { Close } from "./icons";
+import {
+  Button,
+  cx,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui";
+import { Ellipsis } from "./icons";
 import styles from "./ThreadList.module.css";
 
 // Every board query key is prefixed ["messages", …], so one invalidate after a
@@ -21,16 +28,19 @@ function invalidateMessages(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ["messages"] });
 }
 
-/** Delete button + native confirm() for one message row. Owns its own mutation
- *  so an error or pending state on one row never affects its siblings. */
-function DeleteMessageButton({
+/** Three-dot menu + native confirm() for one message row. Owns its own
+ *  mutation so an error or pending state on one row never affects its
+ *  siblings. Rendered as an overlay positioned by the caller, never nested
+ *  inside `.root` — that element is itself a `<button>`, and a trigger can't
+ *  nest inside another interactive element. */
+function MessageMenu({
   messageId,
   confirmText,
-  title,
+  triggerLabel,
 }: {
   messageId: number;
   confirmText: string;
-  title: string;
+  triggerLabel: string;
 }) {
   const queryClient = useQueryClient();
   const remove = useMutation({
@@ -38,19 +48,25 @@ function DeleteMessageButton({
     onSuccess: () => invalidateMessages(queryClient),
   });
   return (
-    <div className={styles.deleteCell}>
-      <Button
-        variant="danger"
-        size="iconSm"
-        title={title}
-        aria-label={title}
-        disabled={remove.isPending}
-        onClick={() => {
-          if (confirm(confirmText)) remove.mutate(messageId);
-        }}
-      >
-        <Close />
-      </Button>
+    <div className={styles.menuCell}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="iconSm" title={triggerLabel} aria-label={triggerLabel}>
+            <Ellipsis />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem
+            variant="danger"
+            disabled={remove.isPending}
+            onSelect={() => {
+              if (confirm(confirmText)) remove.mutate(messageId);
+            }}
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {remove.isError && <p className={styles.error}>{String(remove.error)}</p>}
     </div>
   );
@@ -109,7 +125,7 @@ function Thread({
   if (query.isPending) return <p className="muted">Loading thread…</p>;
   if (query.isError) return <p className="muted">Failed to load thread.</p>;
   // list_thread returns [root, ...replies] — the root is already shown (with
-  // its own cascade-aware delete button) in the collapsed row above, so only
+  // its own cascade-aware delete menu) in the collapsed row above, so only
   // the true replies get a delete affordance here. Giving the duplicated root
   // the singular "delete this reply" wording would understate what its
   // ondelete="CASCADE" actually does.
@@ -122,10 +138,10 @@ function Thread({
             message={message}
             agentName={agentNames.get(message.agent_id) ?? `#${message.agent_id}`}
           />
-          <DeleteMessageButton
+          <MessageMenu
             messageId={message.id}
             confirmText="Delete this reply? This cannot be undone."
-            title="Delete reply"
+            triggerLabel="Reply actions"
           />
         </div>
       ))}
@@ -230,10 +246,10 @@ export default function ThreadList({
                 {expanded === message.id ? " ▾" : " ▸"}
               </span>
             </button>
-            <DeleteMessageButton
+            <MessageMenu
               messageId={message.id}
               confirmText={rootConfirmText(message.subject, reply_count)}
-              title="Delete thread"
+              triggerLabel="Thread actions"
             />
           </div>
           {expanded === message.id && (

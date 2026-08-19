@@ -11,6 +11,7 @@ export * from "./Input";
 export * from "./Textarea";
 export * from "./PageTabs";
 export * from "./Select";
+export * from "./DropdownMenu";
 export * from "./Tooltip";
 export * from "./Dialog";
 export * from "./Separator";
