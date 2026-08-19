@@ -110,6 +110,34 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 cd backend && uv run pytest
 ```
 
+### Test lanes
+
+The suite is split by an `integration` marker applied automatically in
+`tests/conftest.py` to any test whose fixture closure reaches Postgres — nothing
+is marked by hand, so a new test that requests `session` is classified for free:
+
+```sh
+cd backend
+uv run pytest -m "not integration"   # no database needed, ~0.3s
+uv run pytest -m integration         # needs the dev db on 127.0.0.1:5433
+```
+
+CI (`.github/workflows/ci.yml`) runs these as two gated jobs on every PR to
+`main`, the integration lane only starting once the unit lane is green, with a
+`pgvector/pgvector:pg18` service container. Two things to know:
+
+- **`TEST_DATABASE_URL`** overrides the connection string. The default baked into
+  `tests/conftest.py` still names the pre-rename `codegraph` role, so a checkout
+  whose `.env` came from `.env.example` (`POSTGRES_USER=cartograph`) must export
+  it.
+- **Without a reachable database the DB tests skip rather than fail** — locally
+  convenient, dangerous in CI. When `CI` is set they raise instead, so a job can
+  never report green having tested nothing.
+
+CI sets no API keys on purpose: enrichment tests inject fakes, and a real
+`VOYAGE_API_KEY` would send `kb_lookup`'s tier-3 vector path to the live API,
+which swallows its own failures and so would bill silently.
+
 ## Ingesting a repository
 
 Repositories are read from **paths inside the api container**, so the target repo
