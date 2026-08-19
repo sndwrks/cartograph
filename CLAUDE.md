@@ -8,8 +8,13 @@ repositories through the `cartograph` MCP server (tools: `search_code`,
 ## Branching
 
 **`main` is push-protected — never commit or push directly to it.** All changes
-go through a feature branch off main, named `main.<feature>` (sub-branches
-optional: `main.<feature>.<sub-branch>`), landed via pull request.
+go through a feature branch off main, named `main.<feature>`, landed via pull
+request.
+
+**Default to committing on the feature branch you're already on.** Do not
+create a sub-branch (`main.<feature>.<sub-branch>`) just because the next
+commit is a different topic — sub-branches exist for genuinely divergent or
+risky work, and only when the user asks for one.
 
 ## Terms and acronyms
 
