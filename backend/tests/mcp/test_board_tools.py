@@ -1,9 +1,16 @@
 import datetime
 
+import pytest
 from sqlalchemy import func, select
 
 from cartograph.mcp_server import tools
-from cartograph.models import Agent, Node, NodeKind
+from cartograph.models import Agent, AgentMessage, Node, NodeKind, Repository
+from cartograph.query.graph import (
+    AmbiguousNodeNameError,
+    NodeNameNotFoundError,
+    resolve_node_by_name,
+)
+from cartograph.query.messages import UnknownRepositoryError
 
 
 async def test_post_message_self_registers(session, seeded):
@@ -104,3 +111,95 @@ async def test_read_board_agent_filter(session, seeded):
     board = await tools.read_board(session, agent_name="alpha")
     assert [t["body"] for t in board["threads"]] == ["from alpha"]
     assert (await tools.read_board(session, agent_name="nobody"))["threads"] == []
+
+
+# --- slice 19: repo parity on post_message/read_board, and the relocated
+# resolver's raise behaviour (query/graph.py:resolve_node_by_name) ---------
+
+
+async def test_post_message_repo_scopes_anchor(session, seeded):
+    result = await tools.post_message(
+        session, "a1", "x", node_qualified_name="app.util.helper", repo="seeded"
+    )
+    assert "error" not in result
+    assert result["node_id"] == seeded.helper.id
+
+
+async def test_post_message_unknown_repo_errors_and_writes_nothing(session, seeded):
+    before = await session.scalar(select(func.count()).select_from(AgentMessage))
+    result = await tools.post_message(
+        session, "a1", "x", node_qualified_name="app.util.helper", repo="other"
+    )
+    assert "error" in result
+    after = await session.scalar(select(func.count()).select_from(AgentMessage))
+    assert after == before
+
+
+async def test_read_board_repo_scopes_to_anchored_threads(session, seeded):
+    other_repo = Repository(name="other-repo", root_path="/repos/other")
+    session.add(other_repo)
+    await session.flush()
+    other_node = Node(
+        repository_id=other_repo.id,
+        kind=NodeKind.function,
+        name="thing",
+        qualified_name="other.thing",
+    )
+    session.add(other_node)
+    await session.flush()
+
+    await tools.post_message(
+        session,
+        "a1",
+        "seeded anchor",
+        node_qualified_name="app.util.helper",
+        repo="seeded",
+    )
+    await tools.post_message(
+        session,
+        "a1",
+        "other anchor",
+        node_qualified_name="other.thing",
+        repo="other-repo",
+    )
+    await tools.post_message(session, "a1", "unanchored")
+
+    board = await tools.read_board(session, repo="seeded")
+    bodies = {t["body"] for t in board["threads"]}
+    assert bodies == {"seeded anchor", "unanchored"}  # unanchored stays visible everywhere
+
+
+async def test_read_board_unknown_repo_errors(session, seeded):
+    result = await tools.read_board(session, repo="nope")
+    assert "error" in result
+
+
+async def test_resolve_node_by_name_not_found(session, seeded):
+    with pytest.raises(NodeNameNotFoundError):
+        await resolve_node_by_name(session, "does.not.Exist")
+
+
+async def test_resolve_node_by_name_ambiguous(session, seeded):
+    session.add(
+        Node(
+            repository_id=seeded.repo.id,
+            kind=NodeKind.function,
+            name="helper",
+            qualified_name="app.other.helper",
+        )
+    )
+    await session.flush()
+    with pytest.raises(AmbiguousNodeNameError) as exc_info:
+        await resolve_node_by_name(session, "helper")
+    assert {c.qualified_name for c in exc_info.value.candidates} == {
+        "app.util.helper",
+        "app.other.helper",
+    }
+
+
+async def test_resolve_node_by_name_repo_scoping(session, seeded):
+    node = await resolve_node_by_name(session, "app.util.helper", repo="seeded")
+    assert node.id == seeded.helper.id
+
+    with pytest.raises(UnknownRepositoryError):
+        await resolve_node_by_name(session, "app.util.helper", repo="other")

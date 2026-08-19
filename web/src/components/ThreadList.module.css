@@ -15,8 +15,15 @@
   font-size: 0.6875rem; /* 11px */
 }
 
+.rootRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
 .root {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   background: var(--color-surface-sunken);
   border: var(--border);
   border-radius: var(--radius);
@@ -28,10 +35,31 @@
   font-size: var(--text-xs);
 }
 
-.message + .message {
+.deleteCell {
+  flex-shrink: 0;
+}
+
+.messageRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.messageRow .message {
+  flex: 1;
+  min-width: 0;
+}
+
+.messageRow + .messageRow {
   margin-top: var(--space-2);
   padding-top: var(--space-2);
   border-top: var(--border);
+}
+
+.error {
+  margin: 0.125rem 0 0; /* 2px */
+  color: var(--color-warn);
+  font-size: 0.6875rem; /* 11px */
 }
 
 .meta {

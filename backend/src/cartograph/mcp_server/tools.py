@@ -14,64 +14,41 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cartograph.kb.types import UnknownKbTypeError, get_type, type_names
-from cartograph.models import Agent, AgentMessage, Edge, Node, NodeKind, Repository
+from cartograph.models import Agent, AgentMessage, Edge, Node, Repository
 from cartograph.query import graph as q_graph
 from cartograph.query import kb as q_kb
 from cartograph.query import messages as q_messages
 from cartograph.query import search as q_search
 from cartograph.query.agents import get_or_create_agent
+from cartograph.query.graph import (
+    AmbiguousNodeNameError,
+    NodeNameNotFoundError,
+    resolve_node_by_name,
+)
+from cartograph.query.messages import UnknownRepositoryError
 
 EDGE_CAP = 100  # per direction, in get_node
-CANDIDATE_CAP = 10
 INDEX_CAP = 500  # entries returned by kb_get's type index
 
 
 async def _resolve_node(
     session: AsyncSession, qualified_name: str, repo: str | None = None
 ) -> tuple[Node | None, dict | None]:
-    """Resolve a qualified name to a node: exact qname, else unique bare name.
+    """Thin adapter over query.graph.resolve_node_by_name (slice 19).
 
     Returns (node, None) on success, (None, error_dict) otherwise — including
-    a candidates list when the name is ambiguous.
+    a candidates list when the name is ambiguous. The dict shapes below are a
+    frozen contract: tests/mcp/test_board_tools.py and tests/mcp/test_tools.py
+    assert on them byte-for-byte, so this catches the query layer's raised
+    exceptions rather than changing what callers receive.
     """
-    repo_id = None
-    if repo is not None:
-        repository = await session.scalar(
-            select(Repository).where(Repository.name == repo)
-        )
-        if repository is None:
-            return None, {"error": f"unknown repository {repo!r}"}
-        repo_id = repository.id
-
-    def scoped(stmt):
-        stmt = stmt.where(Node.kind != NodeKind.file)
-        if repo_id is not None:
-            stmt = stmt.where(Node.repository_id == repo_id)
-        return stmt
-
-    exact = list(
-        (
-            await session.scalars(
-                scoped(select(Node).where(Node.qualified_name == qualified_name))
-                .order_by(Node.id)
-                .limit(CANDIDATE_CAP + 1)
-            )
-        ).all()
-    )
-    matches = exact
-    if not matches:
-        matches = list(
-            (
-                await session.scalars(
-                    scoped(select(Node).where(Node.name == qualified_name))
-                    .order_by(Node.pagerank.desc(), Node.id)
-                    .limit(CANDIDATE_CAP + 1)
-                )
-            ).all()
-        )
-    if not matches:
+    try:
+        node = await resolve_node_by_name(session, qualified_name, repo)
+    except UnknownRepositoryError as exc:
+        return None, {"error": f"unknown repository {str(exc)!r}"}
+    except NodeNameNotFoundError:
         return None, {"error": f"no node found for {qualified_name!r}"}
-    if len(matches) > 1:
+    except AmbiguousNodeNameError as exc:
         return None, {
             "error": f"ambiguous name {qualified_name!r} — pass a qualified name",
             "candidates": [
@@ -80,10 +57,10 @@ async def _resolve_node(
                     "kind": n.kind.value,
                     "file_path": n.file_path,
                 }
-                for n in matches[:CANDIDATE_CAP]
+                for n in exc.candidates
             ],
         }
-    return matches[0], None
+    return node, None
 
 
 async def search_code(
@@ -227,10 +204,11 @@ async def post_message(
     subject: str | None = None,
     thread_id: int | None = None,
     node_qualified_name: str | None = None,
+    repo: str | None = None,
 ) -> dict:
     node_id = None
     if node_qualified_name is not None:
-        node, error = await _resolve_node(session, node_qualified_name)
+        node, error = await _resolve_node(session, node_qualified_name, repo)
         if error is not None:
             return error
         node_id = node.id
@@ -264,6 +242,7 @@ async def read_board(
     node_qualified_name: str | None = None,
     agent_name: str | None = None,
     since: str | None = None,
+    repo: str | None = None,
 ) -> dict:
     since_dt = None
     if since is not None:
@@ -281,7 +260,7 @@ async def read_board(
 
     node_id = None
     if node_qualified_name is not None:
-        node, error = await _resolve_node(session, node_qualified_name)
+        node, error = await _resolve_node(session, node_qualified_name, repo)
         if error is not None:
             return error
         node_id = node.id
@@ -292,9 +271,17 @@ async def read_board(
             return {"threads": []}
         agent_id = agent.id
 
-    threads = await q_messages.list_threads(
-        session, node_id=node_id, agent_id=agent_id, limit=limit, since=since_dt
-    )
+    try:
+        threads = await q_messages.list_threads(
+            session,
+            node_id=node_id,
+            agent_id=agent_id,
+            repo_name=repo,
+            limit=limit,
+            since=since_dt,
+        )
+    except UnknownRepositoryError as exc:
+        return {"error": f"unknown repository {str(exc)!r}"}
     names = await _agent_names(session, {root.agent_id for root, _, _ in threads})
     return {
         "threads": [

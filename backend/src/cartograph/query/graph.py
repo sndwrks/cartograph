@@ -24,10 +24,26 @@ from cartograph.models import (
     NodeKind,
 )
 from cartograph.query.ingest import get_repository_by_name
+from cartograph.query.messages import UnknownRepositoryError
 
 MAX_NODES = 2500  # the client never receives more than ~2500 renderable nodes
 MAX_HOPS = 3
 MAX_DEPTH = 10
+CANDIDATE_CAP = 10
+
+
+class NodeNameNotFoundError(LookupError):
+    def __init__(self, qualified_name: str) -> None:
+        self.qualified_name = qualified_name
+        super().__init__(f"no node found for {qualified_name!r}")
+
+
+class AmbiguousNodeNameError(LookupError):
+    def __init__(self, qualified_name: str, candidates: list[Node]) -> None:
+        self.qualified_name = qualified_name
+        self.candidates = candidates
+        super().__init__(f"ambiguous name {qualified_name!r} — pass a qualified name")
+
 
 # trust order: resolved > llm_inferred > name_match
 _CONFIDENCE_ORDER = [
@@ -42,6 +58,55 @@ def _allowed_confidences(min_confidence: str | None) -> list[EdgeConfidence] | N
         return None
     floor = EdgeConfidence(min_confidence)
     return _CONFIDENCE_ORDER[: _CONFIDENCE_ORDER.index(floor) + 1]
+
+
+async def resolve_node_by_name(
+    session: AsyncSession, qualified_name: str, repo: str | None = None
+) -> Node:
+    """Resolve a qualified name to a node: exact qname, else unique bare name.
+
+    Raises NodeNameNotFoundError or AmbiguousNodeNameError (candidates
+    attached) rather than returning an error shape — that is a presentation
+    concern for the caller's transport, not this layer's.
+    """
+    repo_id = None
+    if repo is not None:
+        repository = await get_repository_by_name(session, repo)
+        if repository is None:
+            raise UnknownRepositoryError(repo)
+        repo_id = repository.id
+
+    def scoped(stmt):
+        stmt = stmt.where(Node.kind != NodeKind.file)
+        if repo_id is not None:
+            stmt = stmt.where(Node.repository_id == repo_id)
+        return stmt
+
+    exact = list(
+        (
+            await session.scalars(
+                scoped(select(Node).where(Node.qualified_name == qualified_name))
+                .order_by(Node.id)
+                .limit(CANDIDATE_CAP + 1)
+            )
+        ).all()
+    )
+    matches = exact
+    if not matches:
+        matches = list(
+            (
+                await session.scalars(
+                    scoped(select(Node).where(Node.name == qualified_name))
+                    .order_by(Node.pagerank.desc(), Node.id)
+                    .limit(CANDIDATE_CAP + 1)
+                )
+            ).all()
+        )
+    if not matches:
+        raise NodeNameNotFoundError(qualified_name)
+    if len(matches) > 1:
+        raise AmbiguousNodeNameError(qualified_name, matches[:CANDIDATE_CAP])
+    return matches[0]
 
 
 async def overview(session: AsyncSession, repo_name: str) -> dict | None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cartograph.api.schemas import AgentOut
@@ -18,12 +18,16 @@ router = APIRouter(prefix="/agents")
 
 
 class AgentCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     role: str | None = None
     metadata_json: dict | None = None
 
 
 class AgentUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     role: str | None = None
     status: str | None = None
     metadata_json: dict | None = None
