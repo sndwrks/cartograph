@@ -145,7 +145,9 @@ def build_mcp_server() -> MCPServer:
         description=(
             "Post to the agent coordination board. Anchor to a symbol with "
             "node_qualified_name when the message is about specific code. "
-            "First post from a new agent_name self-registers the agent."
+            "First post from a new agent_name self-registers the agent. Pass "
+            "`repo` when working in one repository: without it a bare "
+            "node_qualified_name resolves across every repository in the graph."
         )
     )
     async def post_message(
@@ -154,17 +156,20 @@ def build_mcp_server() -> MCPServer:
         subject: str | None = None,
         thread_id: int | None = None,
         node_qualified_name: str | None = None,
+        repo: str | None = None,
     ) -> dict:
         async with sessionmaker() as session:
             return await tools.post_message(
-                session, agent_name, body, subject, thread_id, node_qualified_name
+                session, agent_name, body, subject, thread_id, node_qualified_name, repo
             )
 
     @server.tool(
         description=(
             "Read the agent coordination board. Check for existing threads "
             "about a symbol before starting work on it. Without thread_id: "
-            "thread roots newest-first; with thread_id: the full thread."
+            "thread roots newest-first; with thread_id: the full thread. Pass "
+            "`repo` when working in one repository: without it a bare "
+            "node_qualified_name resolves across every repository in the graph."
         )
     )
     async def read_board(
@@ -173,10 +178,11 @@ def build_mcp_server() -> MCPServer:
         node_qualified_name: str | None = None,
         agent_name: str | None = None,
         since: str | None = None,
+        repo: str | None = None,
     ) -> dict:
         async with sessionmaker() as session:
             return await tools.read_board(
-                session, limit, thread_id, node_qualified_name, agent_name, since
+                session, limit, thread_id, node_qualified_name, agent_name, since, repo
             )
 
     @server.custom_route("/healthz", methods=["GET"])

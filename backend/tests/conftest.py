@@ -36,6 +36,28 @@ from cartograph.models import (
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
+# Fixtures that reach a live Postgres, directly or as the root of a chain.
+# `at_initial`/`migration_db` belong to tests/kb/test_migration.py, which builds
+# its own throwaway database rather than using the shared engine.
+DB_FIXTURES = frozenset(
+    {"test_engine", "session", "seeded", "migration_db", "at_initial"}
+)
+
+
+def pytest_collection_modifyitems(items):
+    """Mark every DB-touching test `integration`, by fixture closure.
+
+    CI runs the lanes as `-m "not integration"` then `-m integration`. Deriving
+    the split from `item.fixturenames` — which pytest has already resolved to the
+    full transitive closure — keeps it correct for free: a new test that requests
+    `session` is classified without anyone remembering to mark it, and the files
+    holding both pure and DB-backed tests split at the right line.
+    """
+    for item in items:
+        if DB_FIXTURES & set(item.fixturenames):
+            item.add_marker(pytest.mark.integration)
+
+
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://codegraph:change-me@127.0.0.1:5433/cartograph_test",
@@ -53,6 +75,11 @@ async def _ensure_test_database() -> None:
     try:
         conn = await asyncpg.connect(admin_dsn)
     except OSError:
+        if os.environ.get("CI"):
+            # In CI the database is provisioned as a service container. If it is
+            # unreachable the run is broken, and skipping would report green on a
+            # suite that tested nothing.
+            raise
         pytest.skip(
             "test Postgres unreachable on 127.0.0.1:5433 — start it with: "
             "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db"

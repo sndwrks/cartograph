@@ -65,6 +65,10 @@ async def migration_db():
     try:
         conn = await asyncpg.connect(admin)
     except OSError:
+        if os.environ.get("CI"):
+            # See tests/conftest.py: in CI an unreachable database is a failure,
+            # never a skip.
+            raise
         pytest.skip(
             "test Postgres unreachable on 127.0.0.1:5433 — start it with: "
             "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db"

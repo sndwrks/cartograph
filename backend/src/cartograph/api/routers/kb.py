@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
@@ -28,6 +28,8 @@ class KBCreate(BaseModel):
     `term`/`definition` are the pre-typed names, kept as deprecated aliases so
     existing clients (and the slice-08 test suite) keep working byte for byte.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     type: str = DEFAULT_TYPE
     title: str | None = None
@@ -60,6 +62,8 @@ class KBCreate(BaseModel):
 
 
 class KBUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     type: str | None = None
     title: str | None = None
     term: str | None = None  # DEPRECATED alias for title
@@ -84,10 +88,14 @@ class KBUpdate(BaseModel):
 
 
 class PublishBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     replaces_id: int | None = None
 
 
 class RejectBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     reason: str
 
     @model_validator(mode="after")

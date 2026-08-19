@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
+from cartograph.config import get_settings
 from cartograph.enrich.runner import ALL_PHASES, run_phases
 from cartograph.ingest.loader import ingest_repo
 from cartograph.models import Community, Edge, EdgeConfidence, EdgeRel, Node, NodeKind
@@ -43,14 +44,19 @@ async def test_full_enrich(session, repo, fake_llm, fake_embedder):
         for node in summarized
     )
 
-    # communities: every community labeled
+    # communities: every community above COMMUNITY_MIN_SIZE labeled. Singletons
+    # are deliberately left unlabeled (query/enrich.py: naming a cluster of one
+    # costs an LLM call and tells you nothing).
     communities = (
         await session.scalars(
             select(Community).where(Community.repository_id == repo.id)
         )
     ).all()
-    assert communities
-    assert all(c.label == "Test Cluster" for c in communities)
+    min_size = get_settings().COMMUNITY_MIN_SIZE
+    labeled = [c for c in communities if c.node_count >= min_size]
+    assert labeled
+    assert all(c.label == "Test Cluster" for c in labeled)
+    assert all(c.label is None for c in communities if c.node_count < min_size)
 
     # docs: README doc node + llm_inferred references to mentioned symbols
     readme = await node_by_qname(session, repo.id, "README.md", NodeKind.doc)

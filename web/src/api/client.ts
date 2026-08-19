@@ -239,6 +239,8 @@ export const fetchThreads = (opts?: {
 export const fetchThread = (threadId: number) =>
   get<{ messages: MessageOut[] }>("/messages", { thread_id: threadId });
 
+export const deleteMessage = (messageId: number) => del(`/messages/${messageId}`);
+
 export const fetchAgents = () => get<{ agents: AgentOut[] }>("/agents");
 
 export const searchCode = (
