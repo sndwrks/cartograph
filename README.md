@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/assets/logo.svg" alt="Cartograph" width="120" />
+</p>
+
 # Cartograph
 
 A self-hosted codebase knowledge graph. Cartograph ingests one or more repositories and

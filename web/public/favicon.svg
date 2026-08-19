@@ -1,21 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
   <title>Cartograph</title>
   <!--
-    The Cartograph sextant, kept in sync with src/components/Logo.tsx. Same
-    circle (pivot 12.4,3 / limb r 13.4-16.3), same 60 degree limb, same -20
-    rotation, same mounted hardware: index mirror at the pivot, horizon glass
-    in the left frame side, telescope, micrometer drum on the arc.
+    The Cartograph graph mark, kept in sync with src/components/Logo.tsx: one
+    hub, satellites of varying size. Same construction: spokes drawn
+    hub-center to satellite-center as plain lines, then filled circles painted
+    over the endpoints, so draw order (edges first) is load-bearing. Same node
+    positions.
 
-    Two deliberate differences from the header mark, both for 16px: the limb's
-    graduations are dropped (they silt up into a solid band) and the telescope
-    is shortened (its far end reads as a detached speck). Stroke is heavier to
-    match, 2 against the header's 1.4.
+    Two deliberate differences from the header mark, both for 16px: the small
+    lower-left satellite is dropped (five spokes silt up into a blot), and
+    everything is heavier to survive the shrink: node radii up by roughly half
+    a unit, edge stroke 2 against the header's 1.25.
 
     Colors are literals rather than tokens because this file is served straight
     out of public/ and never sees tokens.css; they are the brand purple pair,
     color-brand-purple and its light variant. currentColor is no use either — a
     favicon is painted against the browser's chrome, not the app — so the two
-    tab-bar themes are handled here instead. Stroke lives in the stylesheet
+    tab-bar themes are handled here instead. Paint lives in the stylesheet
     rather than in presentation attributes so var() resolves reliably.
 
     Note for editors: this is XML, so a comment may never contain a double
@@ -25,25 +26,21 @@
   <style>
     :root { --c: #8b5cf6 }
     @media (prefers-color-scheme: dark) { :root { --c: #a78bfa } }
-    .frame {
+    .edges {
       fill: none;
       stroke: var(--c);
       stroke-width: 2;
       stroke-linecap: round;
       stroke-linejoin: round;
     }
-    .mirror { fill: var(--c) }
+    .nodes { fill: var(--c) }
   </style>
-  <g transform="rotate(-20 12 12)">
-    <g class="frame">
-      <path d="M4.25 17.12A16.3 16.3 0 0 0 20.55 17.12L19.1 14.6A13.4 13.4 0 0 1 5.7 14.6Z"/>
-      <path d="M12.4 3L9.1 8.72M7.1 12.18L4.25 17.12"/>
-      <path d="M12.4 3L20.55 17.12"/>
-      <path d="M12.4 3L12.4 19"/>
-      <circle cx="12.4" cy="21" r="2"/>
-      <circle cx="8.1" cy="10.45" r="2"/>
-      <rect x="3" y="8.85" width="3.1" height="3.2" rx="1.6"/>
-    </g>
-    <circle class="mirror" cx="12.4" cy="3" r="1.75"/>
+  <path class="edges" d="M11.5 12L4.5 5M11.5 12L18 4.5M11.5 12L20.5 14.5M11.5 12L14.5 20.5"/>
+  <g class="nodes">
+    <circle cx="11.5" cy="12" r="2.9"/>
+    <circle cx="4.5" cy="5" r="2.6"/>
+    <circle cx="18" cy="4.5" r="2.1"/>
+    <circle cx="20.5" cy="14.5" r="2.5"/>
+    <circle cx="14.5" cy="20.5" r="2.4"/>
   </g>
 </svg>
