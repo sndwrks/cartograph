@@ -12,6 +12,9 @@
 }
 
 .title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
   background: none;
   border: none;
   color: var(--color-accent-text);
@@ -20,6 +23,21 @@
   cursor: pointer;
   padding: 0;
   font-family: inherit;
+}
+
+/* The mark is 1em and takes its color from `currentColor`, so it inherits
+   .title's accent — only the size needs setting, and font-size is the knob.
+   --text-3xl (2.5rem) is the mark's own height, not type: it makes the sextant
+   the tallest thing in the bar, so the bar's --space-4 padding becomes the
+   1rem the mark is inset by, top and bottom. Consequently the mark, not
+   --header-height, is what sets the bar's height now — that token is only a
+   floor and no longer the binding constraint. */
+.mark {
+  font-size: var(--text-3xl);
+  /* The <button> is a flex row of mark + text; without this the mark's line
+     box adds descender space under it and the bar sits taller than 1rem of
+     padding would suggest. */
+  flex: none;
 }
 
 .tabs {

@@ -1,6 +1,7 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { repoList, useAppStore } from "../store";
+import { SextantMark } from "./Logo";
 import {
   PageTab,
   PageTabs,
@@ -35,6 +36,7 @@ export default function TopBar() {
         className={styles.title}
         onClick={() => navigate("/graph")}
       >
+        <SextantMark className={styles.mark} />
         Cartograph
       </button>
       <PageTabs label="sections" className={styles.tabs}>
