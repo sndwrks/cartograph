@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     ENRICH_CONCURRENCY: int = 12
     # nodes per commit: an interrupted run loses at most this much work
     ENRICH_COMMIT_EVERY: int = 100
+    # Anthropic Message Batches mode (enrich --batch): the API caps a batch at
+    # 100K requests or 256MB of payload. The byte bound is measured on the
+    # serialized request JSON (ensure_ascii, an upper bound on what httpx
+    # sends), and 64MB per chunk both stays far under the provider cap and
+    # bounds submit's peak memory to one chunk of prompts.
+    BATCH_MAX_REQUESTS: int = 100_000
+    BATCH_MAX_BYTES: int = 64 * 1024 * 1024
+    # seconds between polls while --batch --wait blocks on the provider;
+    # most batches end within the hour, so a minute costs nothing
+    BATCH_POLL_INTERVAL_S: float = 60.0
     # voyageai's AsyncClient defaults to max_retries=0, which disables the
     # tenacity backoff it already ships (429/503/timeout, exponential jitter
     # capped at 16s). Without this a single 429 kills a whole batch.

@@ -293,6 +293,49 @@ class KnowledgeEntry(Base):
     )
 
 
+class EnrichBatch(Base):
+    """One Anthropic Message Batch submitted by `enrich --batch` (summaries).
+
+    Rows are the resume state for the batch workflow: submit inserts one row
+    per provider batch and exits; status/collect pick up from here in a later
+    process. A row is created (status `submitting`, no provider id yet) BEFORE
+    the provider call and updated after it returns, so a crash or lost
+    response between the two leaves visible evidence instead of an invisible
+    paid batch. Failed, expired, or stale results are only counted in
+    `stats` — the summaries predicate (summary IS NULL OR hash mismatch)
+    re-selects those nodes on the next sync run, so nothing is lost by
+    skipping them.
+    """
+
+    __tablename__ = "enrich_batches"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repositories.id", ondelete="CASCADE"), index=True
+    )
+    phase: Mapped[str] = mapped_column(Text, default="summaries")
+    # NULL only while status is `submitting` (intent recorded, provider call
+    # not yet acknowledged)
+    provider_batch_id: Mapped[Optional[str]] = mapped_column(Text, unique=True)
+    status: Mapped[str] = mapped_column(
+        Text, default="submitting"
+    )  # submitting | submitted | ended | collected | canceled | abandoned
+    request_count: Mapped[int] = mapped_column(Integer, default=0)
+    # candidate nodes are iterated in id order, so each batch covers a
+    # contiguous id span — a forced resubmit skips nodes inside open spans
+    # instead of paying for them twice
+    node_id_min: Mapped[Optional[int]] = mapped_column(BigInteger)
+    node_id_max: Mapped[Optional[int]] = mapped_column(BigInteger)
+    counts: Mapped[Optional[dict]] = mapped_column(JSONB)  # provider request_counts
+    stats: Mapped[Optional[dict]] = mapped_column(JSONB)   # collect outcome
+    error: Mapped[Optional[str]] = mapped_column(Text)
+    submitted_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    ended_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(timezone=True))
+    collected_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(timezone=True))
+
+
 class IngestRun(Base):
     __tablename__ = "ingest_runs"
 

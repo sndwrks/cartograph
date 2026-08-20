@@ -12,6 +12,7 @@ from cartograph.models import (
     Edge,
     EdgeConfidence,
     EdgeRel,
+    EnrichBatch,
     KnowledgeEntry,
     Node,
     NodeKind,
@@ -27,6 +28,19 @@ SUMMARY_KINDS = (
 )
 
 
+def _needs_summary_where(repository_id: int, min_lines: int) -> tuple:
+    return (
+        Node.repository_id == repository_id,
+        Node.kind.in_(SUMMARY_KINDS),
+        (Node.end_line - Node.start_line + 1) >= min_lines,
+        # cache rule: skip when the summary was made from the current source
+        or_(
+            Node.summary.is_(None),
+            Node.summary_source_hash.is_distinct_from(Node.content_hash),
+        ),
+    )
+
+
 async def nodes_needing_summary(
     session: AsyncSession,
     repository_id: int,
@@ -35,21 +49,39 @@ async def nodes_needing_summary(
 ) -> list[Node]:
     stmt = (
         select(Node)
-        .where(
-            Node.repository_id == repository_id,
-            Node.kind.in_(SUMMARY_KINDS),
-            (Node.end_line - Node.start_line + 1) >= min_lines,
-            # cache rule: skip when the summary was made from the current source
-            or_(
-                Node.summary.is_(None),
-                Node.summary_source_hash.is_distinct_from(Node.content_hash),
-            ),
-        )
+        .where(*_needs_summary_where(repository_id, min_lines))
         .order_by(Node.id)
     )
     if limit is not None:
         stmt = stmt.limit(limit)
     return list((await session.scalars(stmt)).all())
+
+
+async def summary_candidate_rows(
+    session: AsyncSession,
+    repository_id: int,
+    min_lines: int,
+    limit: int | None = None,
+) -> list:
+    """The batch-submit variant of nodes_needing_summary: only the columns
+    prompt-building needs, so a 35k-node submit doesn't hold full ORM rows
+    (embedding vectors included) in memory."""
+    stmt = (
+        select(
+            Node.id,
+            Node.kind,
+            Node.qualified_name,
+            Node.file_path,
+            Node.start_line,
+            Node.end_line,
+            Node.content_hash,
+        )
+        .where(*_needs_summary_where(repository_id, min_lines))
+        .order_by(Node.id)
+    )
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return list((await session.execute(stmt)).all())
 
 
 async def set_summary(
@@ -152,6 +184,80 @@ async def set_community_label(
         .where(Community.id == community_id)
         .values(label=label, summary=summary)
     )
+
+
+async def create_enrich_batch(
+    session: AsyncSession,
+    repository_id: int,
+    phase: str,
+    request_count: int,
+    node_id_min: int | None,
+    node_id_max: int | None,
+) -> EnrichBatch:
+    """The submit-intent row: created (status `submitting`, no provider id)
+    BEFORE the provider call, so a crash or lost response between create and
+    acknowledge leaves evidence instead of an invisible paid batch."""
+    row = EnrichBatch(
+        repository_id=repository_id,
+        phase=phase,
+        request_count=request_count,
+        node_id_min=node_id_min,
+        node_id_max=node_id_max,
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
+async def enrich_batches_by_status(
+    session: AsyncSession,
+    repository_id: int,
+    statuses: tuple[str, ...],
+    phase: str = "summaries",
+) -> list[EnrichBatch]:
+    return list(
+        (
+            await session.scalars(
+                select(EnrichBatch)
+                .where(
+                    EnrichBatch.repository_id == repository_id,
+                    EnrichBatch.phase == phase,
+                    EnrichBatch.status.in_(statuses),
+                )
+                .order_by(EnrichBatch.id)
+            )
+        ).all()
+    )
+
+
+async def node_hashes_for_collect(
+    session: AsyncSession, repository_id: int, node_ids: list[int]
+) -> dict[int, tuple[str | None, str | None]]:
+    """id -> (content_hash, summary_source_hash) for a window of batch
+    results, read straight from the database — a column select bypasses the
+    ORM identity map, so a node changed by another process (or earlier in
+    this session) is seen at its current hash, never a cached one. A missing
+    id means the node was deleted by a re-ingest: the result is stale."""
+    if not node_ids:
+        return {}
+    rows = await session.execute(
+        select(Node.id, Node.content_hash, Node.summary_source_hash).where(
+            Node.repository_id == repository_id, Node.id.in_(node_ids)
+        )
+    )
+    return {row.id: (row.content_hash, row.summary_source_hash) for row in rows}
+
+
+async def set_summaries(session: AsyncSession, rows: list[dict]) -> None:
+    """Bulk form of set_summary for batch collect: one executemany UPDATE per
+    window instead of two round trips per node. Each dict carries id, summary,
+    and summary_source_hash; the embedding is nulled the same way set_summary
+    does, so the embeddings phase re-queues the node."""
+    if rows:
+        await session.execute(
+            update(Node),
+            [{**row, "embedding": None} for row in rows],
+        )
 
 
 async def get_artifact_node(

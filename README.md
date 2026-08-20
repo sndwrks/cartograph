@@ -217,8 +217,63 @@ process that exits 0 is not proof it did the work:
 | ---- | ------- |
 | 0 | clean — every item processed |
 | 1 | the phase itself blew up (traceback printed) |
-| 2 | unknown repository |
+| 2 | unknown repository, or a refused batch request (message on stderr — e.g. uncollected batches exist, another batch operation holds the lock) |
 | 3 | finished, but wrote off failed items — **re-run to retry** |
+| 4 | `--batch-status` only: batches still processing at the provider |
+
+### Batch mode: initial enrichment of a large repo
+
+The summaries phase is one API call per node, which on a first-time ingest of
+a big repo means tens of thousands of calls. `--batch` submits them all to the
+[Anthropic Message Batches API](https://platform.claude.com/docs/en/build-with-claude/batch-processing)
+instead: **half the token price**, most batches finish within an hour (24h
+worst case), and nothing has to stay running while you wait — state lives in
+the `enrich_batches` table, so submit, status, and collect are three separate
+invocations:
+
+```sh
+# structure + metrics first (no API spend), then docs so the new doc/config
+# nodes are included in the batch
+docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
+  uv run python -m cartograph.ingest run --repo myrepo --full
+docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
+  uv run python -m cartograph.enrich --repo myrepo --phase docs
+
+# submit — builds the same prompts as the sync path and exits immediately
+docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
+  uv run python -m cartograph.enrich --repo myrepo --phase summaries --batch
+
+# later: exit 4 = still processing, 0 = ready to collect
+docker compose run --rm api \
+  uv run python -m cartograph.enrich --repo myrepo --batch-status
+docker compose run --rm api \
+  uv run python -m cartograph.enrich --repo myrepo --batch-collect
+
+# everything downstream, plus a sync sweep of any failed/stale summaries —
+# summaries and docs read source files, so keep the repo mounted here too
+docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
+  uv run python -m cartograph.enrich --repo myrepo --phase all
+```
+
+`--batch --wait` does submit → poll → collect in one process if you'd rather
+leave a terminal open (it opens a fresh DB connection per poll, so long waits
+survive idle timeouts). Failed, expired, or re-ingested-in-the-meantime items
+are only counted, never written — the content-hash predicate re-selects them,
+so the final sync `--phase all` retries them at normal price and then runs
+embeddings, communities, and kb. Collect within 29 days: the provider deletes
+batch results after that.
+
+Crash safety: every provider batch gets a database row *before* the API call
+and is acknowledged after it, so an interrupt can at worst leave a row marked
+`submitting` — `--batch-status` flags it (check the Console for the orphan).
+Concurrent invocations for the same repo are serialized on an advisory lock,
+and a second submit is refused while uncollected batches exist. `--force`
+submits anyway but skips every node already covered by an open batch, so it
+resumes a crashed submit without paying twice; `--batch-abandon` cancels
+still-processing batches at the provider and clears the rows, handing the
+work back to the sync sweep. Collecting is idempotent: results are verified
+against each node's current content hash, and nodes already summarized from
+that hash are left alone (their embeddings stay paid-for).
 
 ### The embeddings retry loop
 
