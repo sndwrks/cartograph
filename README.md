@@ -179,7 +179,9 @@ docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
 
 Excluding a directory that was already ingested deletes its nodes on the next
 run. Re-registering without `--exclude` keeps the stored list; passing
-`--exclude` with no values clears it.
+`--exclude` with no values clears it. **Passing `--exclude` with values
+replaces the whole list** — include every basename you still want, not just
+the new one, or the previous exclusions silently come back into the graph.
 
 ### Enriching after ingest: summaries, then embeddings
 
@@ -229,7 +231,18 @@ a big repo means tens of thousands of calls. `--batch` submits them all to the
 instead: **half the token price**, most batches finish within an hour (24h
 worst case), and nothing has to stay running while you wait — state lives in
 the `enrich_batches` table, so submit, status, and collect are three separate
-invocations:
+invocations.
+
+One prerequisite after pulling this feature: the `enrich_batches` table
+arrives via migration, and `docker compose run` **bypasses** the entrypoint's
+auto-migrate (only a plain `docker compose up api` runs it). Apply it once
+before the first `--batch`:
+
+```sh
+docker compose run --rm api uv run alembic upgrade head
+```
+
+Then the flow:
 
 ```sh
 # structure + metrics first (no API spend), then docs so the new doc/config
@@ -253,6 +266,21 @@ docker compose run --rm api \
 # summaries and docs read source files, so keep the repo mounted here too
 docker compose run -v /host/path/myrepo:/repos/myrepo --rm api \
   uv run python -m cartograph.enrich --repo myrepo --phase all
+```
+
+The status/collect pair scripts into a hands-off loop the same way the
+embeddings retry loop does — exit 4 is the only "keep waiting" signal, so
+anything else (0 ready, 1/2 real failure) breaks out:
+
+```sh
+while :; do
+  docker compose run --rm api \
+    uv run python -m cartograph.enrich --repo myrepo --batch-status
+  [ $? -eq 4 ] || break
+  sleep 300
+done
+docker compose run --rm api \
+  uv run python -m cartograph.enrich --repo myrepo --batch-collect
 ```
 
 `--batch --wait` does submit → poll → collect in one process if you'd rather
