@@ -12,7 +12,8 @@ import {
   updateKbEntry,
   type KbEntryInput,
 } from "../api/client";
-import { repoList, useAppStore } from "../store";
+import { useRepos } from "../hooks/useRepos";
+import { useAppStore } from "../store";
 import {
   Button,
   Input,
@@ -55,6 +56,7 @@ export default function KbEditorView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const repo = useAppStore((state) => state.repo);
+  const repos = useRepos();
 
   const [form, setForm] = useState<FormState>(EMPTY);
   const [payloadError, setPayloadError] = useState<string | null>(null);
@@ -304,7 +306,7 @@ export default function KbEditorView() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={GLOBAL}>global (every repository)</SelectItem>
-              {repoList().map((name) => (
+              {repos.map((name) => (
                 <SelectItem key={name} value={name}>
                   {name}
                 </SelectItem>

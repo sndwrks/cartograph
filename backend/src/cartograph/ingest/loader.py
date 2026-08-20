@@ -14,7 +14,7 @@ from cartograph.extractors.base import FileExtraction, SymbolRecord, hash_conten
 from cartograph.models import EdgeConfidence, EdgeRel, NodeKind, Repository
 from cartograph.query import ingest as q
 
-from .walker import walk_repo
+from .walker import denied_dirs, is_excluded, walk_repo
 
 logger = logging.getLogger(__name__)
 
@@ -61,13 +61,25 @@ async def _ingest(
     t0 = time.monotonic()
     stored_hashes = await q.load_file_hashes(session, repo.id)
     if files is not None:
+        deny = denied_dirs(repo.exclude_dirs)
         listed = [str(PurePosixPath(p)) for p in files]
         walked = [
-            p for p in listed if (root / p).is_file() and get_extractor_for(p) is not None
+            p
+            for p in listed
+            if not is_excluded(p, deny)
+            and (root / p).is_file()
+            and get_extractor_for(p) is not None
         ]
-        deleted = {p for p in listed if not (root / p).is_file() and p in stored_hashes}
+        # a previously ingested file that is now excluded counts as deleted,
+        # so hook-driven freshenings clean up after a register --exclude
+        deleted = {
+            p
+            for p in listed
+            if p in stored_hashes
+            and (not (root / p).is_file() or is_excluded(p, deny))
+        }
     else:
-        walked = walk_repo(root)
+        walked = walk_repo(root, repo.exclude_dirs)
         deleted = set(stored_hashes) - set(walked)
     sources = {p: (root / p).read_bytes() for p in walked}
     file_hashes = {p: hash_content(src) for p, src in sources.items()}

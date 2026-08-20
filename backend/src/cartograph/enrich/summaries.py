@@ -17,9 +17,10 @@ from .llm import LLMClient
 logger = logging.getLogger(__name__)
 
 SOURCE_LINE_CAP = 200
+SUMMARY_MAX_TOKENS = 300
 
 
-def _read_source(root: Path, node: Node) -> str | None:
+def read_source(root: Path, node: Node) -> str | None:
     if node.file_path is None:
         return None
     path = root / node.file_path
@@ -42,7 +43,8 @@ def _read_source(root: Path, node: Node) -> str | None:
     return "\n".join(selected)
 
 
-def _prompt(node: Node, source: str) -> str:
+# public because batch.py builds the identical prompts for the Batch API path
+def build_prompt(node: Node, source: str) -> str:
     return (
         f"Summarize the purpose and role of this {node.kind.value} in 1-3 "
         "sentences. Describe what it is for and how it fits into the codebase, "
@@ -69,12 +71,14 @@ async def run(
     gate = asyncio.Semaphore(max(1, settings.ENRICH_CONCURRENCY))
 
     async def summarize(node: Node) -> tuple[Node, str | None]:
-        source = _read_source(root, node)
+        source = read_source(root, node)
         if source is None:
             return node, None
         async with gate:
             try:
-                return node, await llm.complete(_prompt(node, source), max_tokens=300)
+                return node, await llm.complete(
+                    build_prompt(node, source), max_tokens=SUMMARY_MAX_TOKENS
+                )
             except Exception:
                 logger.exception("summary failed for %s", node.qualified_name)
                 return node, ""

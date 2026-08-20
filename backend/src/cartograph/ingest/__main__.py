@@ -33,6 +33,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--root", required=True, help="repo root path as seen inside the container"
     )
     register.add_argument("--branch", default="main", help="default branch")
+    register.add_argument(
+        "--exclude",
+        nargs="*",
+        default=None,
+        metavar="DIR",
+        help=(
+            "directory basenames to skip in every walk, on top of the "
+            "built-in deny-list; persists for incremental re-ingests and "
+            "the docs phase. Omit to keep the stored list; pass with no "
+            "values to clear it"
+        ),
+    )
 
     run = sub.add_parser("run", help="ingest a registered repository")
     run.add_argument("--repo", required=True, help="repository name")
@@ -62,9 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
 async def amain(args: argparse.Namespace) -> int:
     async with get_sessionmaker()() as session:
         if args.command == "register":
-            repo = await q.upsert_repository(session, args.name, args.root, args.branch)
+            repo = await q.upsert_repository(
+                session, args.name, args.root, args.branch, exclude_dirs=args.exclude
+            )
             await session.commit()
-            print(f"registered {repo.name} -> {repo.root_path}")
+            suffix = f" (excluding {', '.join(repo.exclude_dirs)})" if repo.exclude_dirs else ""
+            print(f"registered {repo.name} -> {repo.root_path}{suffix}")
             return 0
 
         repo = await q.get_repository_by_name(session, args.repo)

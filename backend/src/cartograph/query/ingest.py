@@ -17,15 +17,28 @@ async def get_repository_by_name(session: AsyncSession, name: str) -> Repository
 
 
 async def upsert_repository(
-    session: AsyncSession, name: str, root_path: str, default_branch: str = "main"
+    session: AsyncSession,
+    name: str,
+    root_path: str,
+    default_branch: str = "main",
+    exclude_dirs: list[str] | None = None,
 ) -> Repository:
+    """exclude_dirs=None leaves an existing repository's list untouched;
+    pass [] to clear it."""
     repo = await get_repository_by_name(session, name)
     if repo is None:
-        repo = Repository(name=name, root_path=root_path, default_branch=default_branch)
+        repo = Repository(
+            name=name,
+            root_path=root_path,
+            default_branch=default_branch,
+            exclude_dirs=exclude_dirs or [],
+        )
         session.add(repo)
     else:
         repo.root_path = root_path
         repo.default_branch = default_branch
+        if exclude_dirs is not None:
+            repo.exclude_dirs = exclude_dirs
     await session.flush()
     return repo
 
@@ -117,6 +130,13 @@ async def upsert_nodes(
     """Insert node rows, last-write-wins on (repo, qname, kind). Returns qname -> id."""
     if not rows:
         return {}
+    # ON CONFLICT DO UPDATE refuses to touch the same row twice in one
+    # statement, and a single minified file can legitimately carry duplicate
+    # qualified names — enforce last-write-wins here instead
+    unique = {
+        (row["repository_id"], row["qualified_name"], row["kind"]): row for row in rows
+    }
+    rows = list(unique.values())
     ids: dict[str, int] = {}
     for chunk in _param_chunks(rows):
         ids.update(await _upsert_nodes_chunk(session, chunk))

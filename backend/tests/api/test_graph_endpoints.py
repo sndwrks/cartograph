@@ -159,3 +159,20 @@ async def test_validation_errors(client, seeded):
             f"/api/v1/nodes/{seeded.save.id}/impact", params={"direction": "sideways"}
         )
     ).status_code == 422
+
+
+async def test_repos_lists_registered_names(client, seeded, session):
+    from cartograph.models import Repository
+
+    session.add(Repository(name="another", root_path="/repos/another"))
+    await session.flush()
+
+    r = await client.get("/api/v1/repos")
+    assert r.status_code == 200
+    assert r.json() == {"repos": ["another", "seeded"]}
+
+
+async def test_repos_empty(client):
+    r = await client.get("/api/v1/repos")
+    assert r.status_code == 200
+    assert r.json() == {"repos": []}

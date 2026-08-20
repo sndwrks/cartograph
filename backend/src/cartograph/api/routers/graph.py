@@ -24,6 +24,11 @@ def _found(result, what: str = "resource"):
     return result
 
 
+@router.get("/repos")
+async def repos(session: SessionDep) -> dict:
+    return {"repos": await q.repositories(session)}
+
+
 @router.get("/overview")
 async def overview(repo: str, session: SessionDep) -> dict:
     return _found(await q.overview(session, repo), "repository")

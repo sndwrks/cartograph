@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
-import { repoList, useAppStore } from "../store";
+import { useRepos } from "../hooks/useRepos";
+import { useAppStore } from "../store";
 import { GraphMark } from "./Logo";
 import {
   PageTab,
@@ -17,8 +19,16 @@ export default function TopBar() {
   const repo = useAppStore((state) => state.repo);
   const setRepo = useAppStore((state) => state.setRepo);
   const navigate = useNavigate();
-  const repos = repoList();
+  const repos = useRepos();
   const { pathname } = useLocation();
+
+  // the store boots with repo=null; adopt the first registered repo once the
+  // list arrives (or re-adopt if the stored name is no longer registered)
+  useEffect(() => {
+    if (repos.length > 0 && (repo === null || !repos.includes(repo))) {
+      setRepo(repos[0]);
+    }
+  }, [repos, repo, setRepo]);
 
   // `/c/:id` and `/n/:id` are siblings of `/graph`, not children, so no single
   // NavLink `to`/`end` combination can cover all three: `end` only tightens

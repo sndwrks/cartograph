@@ -125,6 +125,8 @@ const del = async (path: string): Promise<void> => {
   await unwrap<void>(await fetch(`${BASE}${path}`, { method: "DELETE" }));
 };
 
+export const fetchRepos = () => get<{ repos: string[] }>("/repos");
+
 export const fetchOverview = (repo: string) =>
   get<OverviewResponse>("/overview", { repo });
 
