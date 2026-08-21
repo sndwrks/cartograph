@@ -1,0 +1,10 @@
+{
+  // comments and trailing commas are legal in tsconfig files
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@api/*": ["./imports/api/*"],
+      "@recoil/atoms": ["./imports/recoil/atoms"],
+    },
+  },
+}

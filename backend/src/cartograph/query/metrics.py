@@ -6,7 +6,15 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from cartograph.models import Community, CommunityEdge, Edge, EdgeRel, Node, NodeKind
+from cartograph.models import (
+    Community,
+    CommunityEdge,
+    Edge,
+    EdgeConfidence,
+    EdgeRel,
+    Node,
+    NodeKind,
+)
 
 SYMBOL_KINDS = (
     NodeKind.module,
@@ -39,18 +47,23 @@ async def load_graph(
     # filter endpoints by join, not id lists — asyncpg caps a statement at
     # 32767 bind params, which a large repo's symbol count exceeds
     src, dst = aliased(Node), aliased(Node)
+    # name_match edges are unproven hints, not evidence — they must not shape
+    # pagerank or communities; distinct collapses per-src_line parallel edges,
+    # which would otherwise act as hidden multiplicity weights
     rows = await session.execute(
         select(Edge.src_id, Edge.dst_id)
+        .distinct()
         .join(src, Edge.src_id == src.id)
         .join(dst, Edge.dst_id == dst.id)
         .where(
             Edge.rel != EdgeRel.contains,
+            Edge.confidence != EdgeConfidence.name_match,
             src.repository_id == repository_id,
             src.kind.in_(SYMBOL_KINDS),
             dst.repository_id == repository_id,
             dst.kind.in_(SYMBOL_KINDS),
         )
-        .order_by(Edge.id)
+        .order_by(Edge.src_id, Edge.dst_id)
     )
     return ids, [(src_id, dst_id) for src_id, dst_id in rows.all()]
 

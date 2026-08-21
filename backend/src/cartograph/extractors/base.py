@@ -9,7 +9,7 @@ ingest loader (slice 05) maps them.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Protocol
 
@@ -40,6 +40,18 @@ class RefRecord:
 
 
 @dataclass(frozen=True)
+class FieldAssignRecord:
+    """A constructor-assigned collaborator field, emitted by both extractors:
+    TS `this.svc = new OrderService()` and Python `self.svc = OrderService()`.
+    The resolver uses these to resolve `this.svc.save()` / `self.svc.save()`."""
+
+    class_qname: str  # enclosing class, e.g. "app.Server.CompanionBridge"
+    field_name: str   # "svc"
+    ctor_expr: str    # dotted constructor expression as written
+    line: int
+
+
+@dataclass(frozen=True)
 class FileExtraction:
     path: str            # repo-relative, posix
     language: str        # "python" | "typescript" | "javascript"
@@ -47,13 +59,19 @@ class FileExtraction:
     symbols: list[SymbolRecord]
     imports: list[ImportRecord]
     refs: list[RefRecord]
+    # constructor-assigned collaborators, for resolving this.field.method()
+    field_assigns: list[FieldAssignRecord] = field(default_factory=list)
 
 
 class Extractor(Protocol):
     language: str
     extensions: tuple[str, ...]
 
-    def extract(self, path: str, source: bytes) -> FileExtraction: ...
+    # context carries per-repo resolution data (e.g. TsResolutionContext);
+    # extractors that need none accept and ignore it
+    def extract(
+        self, path: str, source: bytes, context: object | None = None
+    ) -> FileExtraction: ...
 
 
 def hash_content(source: bytes) -> str:

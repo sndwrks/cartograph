@@ -85,6 +85,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="with --batch: poll until every batch ends, then collect inline",
     )
+    parser.add_argument(
+        "--provider",
+        choices=("anthropic", "claude-code"),
+        default=None,
+        help="LLM provider for docs/summaries/communities (default: ENRICH_PROVIDER setting).",
+    )
     return parser
 
 
@@ -151,7 +157,7 @@ async def amain(args: argparse.Namespace) -> int:
     if args.batch or args.batch_status or args.batch_collect or args.batch_abandon:
         return await amain_batch(args)
     phases = ALL_PHASES if args.phase == "all" else (args.phase,)
-    llm = build_llm() if LLM_PHASES.intersection(phases) else None
+    llm = build_llm(args.provider) if LLM_PHASES.intersection(phases) else None
     embedder = build_embedder() if EMBED_PHASES.intersection(phases) else None
 
     async with get_sessionmaker()() as session:
@@ -188,6 +194,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.wait and not args.batch:
         parser.error("--wait only applies to --batch")
+    if args.provider == "claude-code" and (
+        args.batch or args.batch_status or args.batch_collect or args.batch_abandon
+    ):
+        parser.error(
+            "--provider claude-code cannot be combined with batch flags: "
+            "batch mode uses the Anthropic Message Batches API, which is API-only."
+        )
     return asyncio.run(amain(args))
 
 

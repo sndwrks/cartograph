@@ -1,5 +1,4 @@
 import asyncio
-import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -8,15 +7,19 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
+from cartograph.config import get_settings
 from cartograph.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# The DATABASE_URL env var wins over alembic.ini's sqlalchemy.url.
-if os.environ.get("DATABASE_URL"):
-    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+# Settings resolves DATABASE_URL the same way the app does — environment
+# first, then the repo-root .env — so host-run alembic needs no exports.
+# %% escapes ConfigParser interpolation in case the password contains %.
+config.set_main_option(
+    "sqlalchemy.url", get_settings().DATABASE_URL.replace("%", "%%")
+)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

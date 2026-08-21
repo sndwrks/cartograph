@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cartograph.extractors import get_extractor_for, resolve
 from cartograph.extractors.base import FileExtraction, SymbolRecord, hash_content
+from cartograph.extractors.ts_context import TsResolutionContext, discover_ts_context
 from cartograph.models import EdgeConfidence, EdgeRel, NodeKind, Repository
 from cartograph.query import ingest as q
 
@@ -41,11 +42,13 @@ async def ingest_repo(
     return stats
 
 
-def _extract(path: str, source: bytes) -> FileExtraction:
+def _extract(
+    path: str, source: bytes, context: TsResolutionContext | None = None
+) -> FileExtraction:
     extractor = get_extractor_for(path)
     if extractor is None:  # walker/CLI filtering should prevent this
         raise ValueError(f"no extractor for {path}")
-    return extractor.extract(path, source)
+    return extractor.extract(path, source, context)
 
 
 async def _ingest(
@@ -102,9 +105,21 @@ async def _ingest(
 
     # --- extract ----------------------------------------------------------
     t0 = time.monotonic()
-    changed_extractions = [_extract(p, sources[p]) for p in changed]
+    # the discovery walk (tsconfig/package.json manifests) only pays off for
+    # TS/JS files; skip it for pure-Python batches and single-file hook runs
+    extract_paths = [*changed, *sorted(dependents)]
+    needs_ts_context = any(
+        getattr(get_extractor_for(p), "language", None) == "typescript"
+        for p in extract_paths
+    )
+    ts_context = (
+        discover_ts_context(root, denied_dirs(repo.exclude_dirs))
+        if needs_ts_context
+        else None
+    )
+    changed_extractions = [_extract(p, sources[p], ts_context) for p in changed]
     dependent_extractions = [
-        _extract(p, (root / p).read_bytes()) for p in sorted(dependents)
+        _extract(p, (root / p).read_bytes(), ts_context) for p in sorted(dependents)
     ]
     timings["extract"] = time.monotonic() - t0
 
@@ -113,11 +128,11 @@ async def _ingest(
     locations = await q.load_symbol_locations(session, repo.id)
     nodes_added = nodes_deleted = edges_added = 0
     for extraction in changed_extractions:
-        nodes_deleted += await q.delete_nodes_for_path(session, repo.id, extraction.path)
-        added, contains = await _load_file(
+        added, contains, stale = await _load_file(
             session, repo.id, extraction, file_hashes[extraction.path], locations
         )
         nodes_added += added
+        nodes_deleted += stale
         edges_added += contains
         await session.commit()
     for path in sorted(deleted):
@@ -186,8 +201,12 @@ async def _load_file(
     extraction: FileExtraction,
     file_hash: str,
     locations: dict[tuple[str, str], str | None],
-) -> tuple[int, int]:
-    """Insert the file node, symbol nodes, and contains edges. Returns counts."""
+) -> tuple[int, int, int]:
+    """Upsert the file node, symbol nodes, and contains edges, then prune
+    symbols the extraction no longer produces. Upsert-then-prune (rather than
+    delete-then-insert) keeps node ids stable across re-ingest so paid-for
+    summaries and embeddings survive. Returns (inserted, contains, stale) —
+    inserted counts genuinely new nodes, not conflicted updates."""
     rows = [
         {
             "repository_id": repository_id,
@@ -224,7 +243,13 @@ async def _load_file(
                 "content_hash": sym.content_hash,
             }
         )
-    ids = await q.upsert_nodes(session, rows)
+    ids, inserted = await q.upsert_nodes(session, rows)
+    stale = await q.delete_stale_nodes_for_path(
+        session,
+        repository_id,
+        extraction.path,
+        {(row["qualified_name"], row["kind"].value) for row in rows},
+    )
 
     # contains edges: file -> module, then each symbol under its qname parent
     # (module -> top-level, class -> methods/nested)
@@ -254,4 +279,4 @@ async def _load_file(
             for src, dst in edge_rows
         ],
     )
-    return len(rows), contains
+    return inserted, contains, stale

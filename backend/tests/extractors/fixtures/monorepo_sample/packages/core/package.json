@@ -1,0 +1,4 @@
+{
+  "name": "@acme/core",
+  "main": "dist/index.js"
+}

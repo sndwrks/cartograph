@@ -5,9 +5,9 @@ import pytest
 from cartograph.extractors import get_extractor_for
 from cartograph.extractors.base import ImportRecord
 from cartograph.extractors.resolve import resolve
+from cartograph.extractors.ts_context import aliases_from_tsconfig, discover_ts_context
 from cartograph.extractors.typescript import (
     TypeScriptExtractor,
-    aliases_from_tsconfig,
     module_qname_for_path,
 )
 
@@ -24,21 +24,21 @@ FILES = (
     "src/legacy.js",
 )
 
-
-def make_extractor():
-    aliases = aliases_from_tsconfig((FIXTURES / "tsconfig.json").read_text())
-    return TypeScriptExtractor(aliases=aliases)
+CONTEXT = discover_ts_context(FIXTURES)
 
 
 def extract(rel: str):
-    return make_extractor().extract(rel, (FIXTURES / rel).read_bytes())
+    return TypeScriptExtractor().extract(rel, (FIXTURES / rel).read_bytes(), CONTEXT)
 
 
 @pytest.fixture(scope="module")
 def edges():
-    extractor = make_extractor()
+    extractor = TypeScriptExtractor()
     return resolve(
-        [extractor.extract(rel, (FIXTURES / rel).read_bytes()) for rel in FILES]
+        [
+            extractor.extract(rel, (FIXTURES / rel).read_bytes(), CONTEXT)
+            for rel in FILES
+        ]
     )
 
 
@@ -123,7 +123,7 @@ def test_reexport_barrel_imports():
 
 
 def test_named_import_with_alias():
-    result = make_extractor().extract(
+    result = TypeScriptExtractor().extract(
         "src/x.ts", b'import { Order as O, render } from "./models/order";\n'
     )
     assert result.imports == [
@@ -164,7 +164,7 @@ def test_syntax_error_file_extracts():
 
 
 def test_registry_covers_all_extensions():
-    for path in ("a.ts", "a.tsx", "a.js", "a.jsx"):
+    for path in ("a.ts", "a.tsx", "a.mts", "a.cts", "a.js", "a.jsx", "a.mjs", "a.cjs"):
         extractor = get_extractor_for(path)
         assert extractor is not None and extractor.language == "typescript"
 

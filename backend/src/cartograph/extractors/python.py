@@ -6,6 +6,7 @@ import tree_sitter_python as tspython
 from tree_sitter import Language, Node, Parser
 
 from .base import (
+    FieldAssignRecord,
     FileExtraction,
     ImportRecord,
     RefRecord,
@@ -129,7 +130,10 @@ class PythonExtractor:
     language = "python"
     extensions = (".py",)
 
-    def extract(self, path: str, source: bytes) -> FileExtraction:
+    def extract(
+        self, path: str, source: bytes, context: object | None = None
+    ) -> FileExtraction:
+        # context is repo-resolution data for other languages; Python needs none
         module_qname = module_qname_for_path(path)
         is_package = path.split("/")[-1] == "__init__.py"
         parser = Parser(_PY_LANGUAGE)
@@ -151,6 +155,7 @@ class PythonExtractor:
             )
         ]
         refs: list[RefRecord] = []
+        field_assigns: list[FieldAssignRecord] = []
         scopes: list[tuple[str, str]] = [("module", module_qname)]
 
         def emit_definition(node: Node) -> None:
@@ -201,6 +206,37 @@ class PythonExtractor:
             if node.type in ("class_definition", "function_definition"):
                 emit_definition(node)
                 return
+            if node.type == "assignment":
+                # self.field = Collaborator(...), for this/self field typing
+                left = node.child_by_field_name("left")
+                right = node.child_by_field_name("right")
+                if (
+                    left is not None
+                    and right is not None
+                    and left.type == "attribute"
+                    and right.type == "call"
+                ):
+                    obj = left.child_by_field_name("object")
+                    attr = left.child_by_field_name("attribute")
+                    fn = right.child_by_field_name("function")
+                    cls = next(
+                        (q for k, q in reversed(scopes) if k == "class"), None
+                    )
+                    if (
+                        obj is not None
+                        and attr is not None
+                        and fn is not None
+                        and cls is not None
+                        and obj.type == "identifier"
+                        and _text(source, obj) == "self"
+                    ):
+                        ctor = _dotted_text(source, fn)
+                        if ctor is not None:
+                            field_assigns.append(
+                                FieldAssignRecord(
+                                    cls, _text(source, attr), ctor, _line(node)
+                                )
+                            )
             if node.type == "call":
                 fn = node.child_by_field_name("function")
                 if fn is not None:
@@ -234,4 +270,5 @@ class PythonExtractor:
             symbols=symbols,
             imports=imports,
             refs=refs,
+            field_assigns=field_assigns,
         )

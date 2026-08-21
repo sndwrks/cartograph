@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from cartograph.extractors.base import FileExtraction, RefRecord, SymbolRecord
+from cartograph.extractors.base import (
+    FileExtraction,
+    ImportRecord,
+    RefRecord,
+    SymbolRecord,
+)
 from cartograph.extractors.python import PythonExtractor
 from cartograph.extractors.resolve import resolve
 
@@ -134,28 +139,102 @@ def _module_extraction(qname, symbols=(), refs=()):
     )
 
 
-def test_candidate_cap_and_dedupe():
-    definers = [
+def _dup_definers(count, name="dupe"):
+    return [
         _module_extraction(
             f"m{i}",
-            symbols=[SymbolRecord("function", "dup", f"m{i}.dup", 1, 1, "h")],
+            symbols=[SymbolRecord("function", name, f"m{i}.{name}", 1, 1, "h")],
         )
-        for i in range(7)
+        for i in range(count)
     ]
+
+
+def test_ambiguous_bare_name_emits_nothing():
+    caller = _module_extraction(
+        "caller", refs=[RefRecord("call", "caller", "dupe", 3)]
+    )
+    edges = resolve([*_dup_definers(7), caller])
+    assert not [e for e in edges if e.confidence == "name_match"]
+
+
+def test_bare_name_within_cap_and_dedupe():
     caller = _module_extraction(
         "caller",
         refs=[
-            RefRecord("call", "caller", "dup", 3),
-            RefRecord("call", "caller", "dup", 3),  # dedupes to one edge each
+            RefRecord("call", "caller", "dupe", 3),
+            RefRecord("call", "caller", "dupe", 3),  # dedupes to one edge each
         ],
     )
-    edges = resolve([*definers, caller])
+    edges = resolve([*_dup_definers(3), caller])
     name_matches = [e for e in edges if e.confidence == "name_match"]
-    assert len(name_matches) == 5
-    assert [e.dst_qname for e in name_matches] == [
-        "m0.dup",
-        "m1.dup",
-        "m2.dup",
-        "m3.dup",
-        "m4.dup",
-    ]
+    assert [e.dst_qname for e in name_matches] == ["m0.dupe", "m1.dupe", "m2.dupe"]
+
+
+def test_short_bare_name_emits_nothing():
+    definer = _module_extraction(
+        "m0", symbols=[SymbolRecord("function", "t", "m0.t", 1, 1, "h")]
+    )
+    caller = _module_extraction("caller", refs=[RefRecord("call", "caller", "t", 3)])
+    edges = resolve([definer, caller])
+    assert not [e for e in edges if e.confidence == "name_match"]
+
+
+def test_short_ambiguous_name_emits_nothing():
+    # generic 3-char verbs (set, has, get) with multiple candidates are
+    # framework-style globals, not evidence of these particular targets
+    caller = _module_extraction(
+        "caller", refs=[RefRecord("call", "caller", "has", 3)]
+    )
+    edges = resolve([*_dup_definers(2, name="has"), caller])
+    assert not [e for e in edges if e.confidence == "name_match"]
+
+
+def test_short_unambiguous_name_still_matches():
+    # a single repo-wide candidate stays plausible even at 3 chars
+    caller = _module_extraction(
+        "caller", refs=[RefRecord("call", "caller", "has", 3)]
+    )
+    edges = resolve([*_dup_definers(1, name="has"), caller])
+    assert [e.dst_qname for e in edges if e.confidence == "name_match"] == ["m0.has"]
+
+
+def test_python_self_field_call_resolved():
+    service = b"class OrderService:\n    def save(self):\n        return 1\n"
+    app = (
+        b"from pkg.svc import OrderService\n\n"
+        b"class App:\n"
+        b"    def __init__(self):\n"
+        b"        self.svc = OrderService()\n"
+        b"    def run(self):\n"
+        b"        return self.svc.save()\n"
+    )
+    extractor = PythonExtractor()
+    edges = resolve(
+        [
+            extractor.extract("pkg/svc.py", service),
+            extractor.extract("pkg/app.py", app),
+        ]
+    )
+    hits = find(
+        edges, src="pkg.app.App.run", dst="pkg.svc.OrderService.save", rel="calls"
+    )
+    assert len(hits) == 1 and hits[0].confidence == "resolved"
+
+
+def test_failed_import_ref_dropped():
+    definer = _module_extraction(
+        "other",
+        symbols=[SymbolRecord("function", "useState", "other.useState", 1, 1, "h")],
+    )
+    caller = FileExtraction(
+        path="caller.py",
+        language="python",
+        module_qname="caller",
+        symbols=[SymbolRecord("module", "caller", "caller", 1, 1, "h")],
+        imports=[ImportRecord("react", "react", 1)],
+        refs=[RefRecord("call", "caller", "react.useState", 3)],
+    )
+    edges = resolve([definer, caller])
+    # the ref's base is a known (external) import; it must not degrade to a
+    # name_match against an unrelated local `useState`
+    assert not [e for e in edges if e.dst_qname == "other.useState"]

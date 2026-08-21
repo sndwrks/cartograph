@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -111,6 +111,37 @@ async def delete_nodes_for_path(
     return result.rowcount or 0
 
 
+async def delete_stale_nodes_for_path(
+    session: AsyncSession,
+    repository_id: int,
+    path: str,
+    keep: set[tuple[str, str]],
+) -> int:
+    """Delete the path's nodes whose (qualified_name, kind value) is not in
+    keep — symbols the latest extraction no longer produces. Upserting then
+    pruning (instead of delete-then-insert) keeps node ids stable so
+    summaries and embeddings survive re-ingest."""
+    rows = (
+        await session.execute(
+            select(Node.id, Node.qualified_name, Node.kind).where(
+                Node.repository_id == repository_id, Node.file_path == path
+            )
+        )
+    ).all()
+    stale_ids = [
+        node_id for node_id, qname, kind in rows if (qname, kind.value) not in keep
+    ]
+    deleted = 0
+    for start in range(0, len(stale_ids), _MAX_BIND_PARAMS):
+        result = await session.execute(
+            delete(Node).where(
+                Node.id.in_(stale_ids[start : start + _MAX_BIND_PARAMS])
+            )
+        )
+        deleted += result.rowcount or 0
+    return deleted
+
+
 # asyncpg binds parameters as int16, so a single statement can carry at most
 # 32767 of them; a full ingest of a mid-size repo blows past that in one batch.
 # Chunk by row width and leave headroom.
@@ -126,10 +157,13 @@ def _param_chunks(rows: list[dict]) -> Iterable[list[dict]]:
 
 async def upsert_nodes(
     session: AsyncSession, rows: list[dict]
-) -> dict[str, int]:
-    """Insert node rows, last-write-wins on (repo, qname, kind). Returns qname -> id."""
+) -> tuple[dict[str, int], int]:
+    """Insert node rows, last-write-wins on (repo, qname, kind).
+
+    Returns (qname -> id, count of rows actually inserted rather than
+    updated) so ingest stats can report true additions."""
     if not rows:
-        return {}
+        return {}, 0
     # ON CONFLICT DO UPDATE refuses to touch the same row twice in one
     # statement, and a single minified file can legitimately carry duplicate
     # qualified names — enforce last-write-wins here instead
@@ -138,14 +172,17 @@ async def upsert_nodes(
     }
     rows = list(unique.values())
     ids: dict[str, int] = {}
+    inserted = 0
     for chunk in _param_chunks(rows):
-        ids.update(await _upsert_nodes_chunk(session, chunk))
-    return ids
+        chunk_ids, chunk_inserted = await _upsert_nodes_chunk(session, chunk)
+        ids.update(chunk_ids)
+        inserted += chunk_inserted
+    return ids, inserted
 
 
 async def _upsert_nodes_chunk(
     session: AsyncSession, rows: list[dict]
-) -> dict[str, int]:
+) -> tuple[dict[str, int], int]:
     stmt = pg_insert(Node).values(rows)
     stmt = stmt.on_conflict_do_update(
         index_elements=["repository_id", "qualified_name", "kind"],
@@ -157,9 +194,16 @@ async def _upsert_nodes_chunk(
             "content_hash": stmt.excluded.content_hash,
             "updated_at": func.now(),
         },
-    ).returning(Node.id, Node.qualified_name)
+        # xmax = 0 distinguishes a freshly inserted row from a conflicted
+        # update (Postgres-specific, like the pg_insert above)
+    ).returning(Node.id, Node.qualified_name, literal_column("(xmax = 0)"))
     result = await session.execute(stmt)
-    return {qname: node_id for node_id, qname in result.all()}
+    ids: dict[str, int] = {}
+    inserted = 0
+    for node_id, qname, was_insert in result.all():
+        ids[qname] = node_id
+        inserted += bool(was_insert)
+    return ids, inserted
 
 
 async def insert_edges_ignore_conflicts(

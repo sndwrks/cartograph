@@ -156,9 +156,60 @@ async def test_incremental_change_with_dependent_expansion(session, repo_root):
 async def test_full_flag_rewrites_everything(session, repo_root):
     repo = await register(session, repo_root)
     await ingest_repo(session, repo)
+    before = await node_ids(session, repo.id)
     stats = await ingest_repo(session, repo, full=True)
     assert stats["files_changed"] == 6
+    # upsert-then-prune: unchanged content keeps every node id (and with it
+    # any summary/embedding), nothing is deleted, and nodes_added reports
+    # genuine inserts rather than conflicted updates
+    assert stats["nodes_deleted"] == 0
+    assert stats["nodes_added"] == 0
+    assert await node_ids(session, repo.id) == before
+
+
+async def test_reingest_preserves_summaries(session, repo_root):
+    repo = await register(session, repo_root)
+    await ingest_repo(session, repo)
+    helper = await session.scalar(
+        select(Node).where(
+            Node.repository_id == repo.id,
+            Node.qualified_name == "pkg.util.helper",
+        )
+    )
+    helper.summary = "adds one"
+    helper.summary_source_hash = helper.content_hash
+    await session.commit()
+    helper_id = helper.id
+
+    await ingest_repo(session, repo, full=True)
+    helper = await session.scalar(
+        select(Node).where(
+            Node.repository_id == repo.id,
+            Node.qualified_name == "pkg.util.helper",
+        )
+    )
+    assert helper.id == helper_id
+    assert helper.summary == "adds one"
+
+
+async def test_removed_symbol_pruned(session, repo_root):
+    repo = await register(session, repo_root)
+    await ingest_repo(session, repo)
+    assert ("pkg.util.render", "function") in await node_ids(session, repo.id)
+
+    util = repo_root / "pkg" / "util.py"
+    util.write_text(
+        "\n".join(
+            line
+            for line in util.read_text().splitlines()
+            if not line.startswith("def render")
+            and not line.startswith('    return "util"')
+        )
+        + "\n"
+    )
+    stats = await ingest_repo(session, repo)
     assert stats["nodes_deleted"] > 0
+    assert ("pkg.util.render", "function") not in await node_ids(session, repo.id)
 
 
 async def test_deletion(session, repo_root):
@@ -280,7 +331,10 @@ async def test_upsert_nodes_dedupes_within_batch(session, repo_root):
         "end_line": 1,
         "content_hash": "first",
     }
-    ids = await q.upsert_nodes(session, [row, {**row, "content_hash": "last"}])
+    ids, inserted = await q.upsert_nodes(
+        session, [row, {**row, "content_hash": "last"}]
+    )
     assert list(ids) == ["bundle.To"]
+    assert inserted == 1
     node = await session.get(Node, ids["bundle.To"])
     assert node.content_hash == "last"
