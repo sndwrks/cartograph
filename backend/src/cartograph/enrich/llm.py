@@ -44,7 +44,16 @@ class AnthropicLLM:
         return flatten_text(response.content)
 
 
-def build_llm() -> AnthropicLLM:
-    return AnthropicLLM(
-        require_api_key("the summaries, communities, and docs phases")
+def build_llm(provider: str | None = None) -> LLMClient:
+    resolved = provider or get_settings().ENRICH_PROVIDER
+    if resolved == "anthropic":
+        return AnthropicLLM(
+            require_api_key("the summaries, communities, and docs phases")
+        )
+    if resolved == "claude-code":
+        from cartograph.enrich.claude_code import ClaudeCodeLLM
+
+        return ClaudeCodeLLM()
+    raise SystemExit(
+        f"Unknown ENRICH_PROVIDER {resolved!r}; expected 'anthropic' or 'claude-code'."
     )

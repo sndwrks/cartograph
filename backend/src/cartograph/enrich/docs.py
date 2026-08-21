@@ -132,6 +132,10 @@ async def run(
                     logger.exception("doc linking failed for %s", rel)
                     failed += 1
                     qnames = []
+                    # keep the node re-selectable: with the new hash persisted
+                    # a re-run would see it "unchanged" and never retry the
+                    # links, orphaning the failure forever
+                    node.content_hash = ""
                 target_ids = [
                     candidate_by_qname[qname]
                     for qname in qnames

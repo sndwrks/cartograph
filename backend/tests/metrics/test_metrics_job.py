@@ -6,13 +6,23 @@ from sqlalchemy import select
 
 from cartograph.ingest.loader import ingest_repo
 from cartograph.metrics.job import run_metrics
-from cartograph.models import Community, CommunityEdge, Edge, EdgeRel, Node, NodeKind
+from cartograph.models import (
+    Community,
+    CommunityEdge,
+    Edge,
+    EdgeConfidence,
+    EdgeRel,
+    Node,
+    NodeKind,
+)
 from cartograph.query import ingest as qi
 
 FIXTURE = Path(__file__).parents[1] / "extractors" / "fixtures" / "py_sample"
 
 SYMBOL_COUNT = 22  # 28 nodes ingested minus 6 file nodes
-NON_CONTAINS_EDGES = 16
+# 16 non-contains edges in the DB, minus the 5 name_match ones: the metrics
+# graph runs on distinct evidence-confidence pairs only
+METRICS_EDGES = 11
 
 
 @pytest.fixture
@@ -56,7 +66,7 @@ async def member_sets(session, repo_id) -> set[frozenset[int]]:
 async def test_metrics_and_clustering(session, repo):
     stats = await run_metrics(session, repo)
     assert stats["vertices"] == SYMBOL_COUNT
-    assert stats["edges"] == NON_CONTAINS_EDGES
+    assert stats["edges"] == METRICS_EDGES
     assert stats["clustered"] is True
     assert stats["communities"] >= 1
 
@@ -64,7 +74,12 @@ async def test_metrics_and_clustering(session, repo):
     assert len(symbols) == SYMBOL_COUNT
     for node in symbols:
         assert node.pagerank > 0, node.qualified_name
-        assert node.community_id is not None, node.qualified_name
+        # isolated vertices (no evidence edges) stay unclustered rather than
+        # becoming singleton communities
+        if node.degree_in + node.degree_out > 0:
+            assert node.community_id is not None, node.qualified_name
+        else:
+            assert node.community_id is None, node.qualified_name
 
     # file nodes are excluded from the metrics graph and keep defaults
     files = (
@@ -82,24 +97,30 @@ async def test_metrics_and_clustering(session, repo):
     # cached_helper and referenced by cli's module-level `entry = u.helper`
     helper = await get_node(session, repo.id, "pkg.util.helper")
     assert (helper.degree_in, helper.degree_out) == (3, 0)
-    # save calls Node(), n.validate(), self.check(), render() (2 name_match);
-    # cli.main's svc.save(1) name_matches into it
+    # save's name_match edges (n.validate, render x2 out; cli.main's svc.save
+    # in) no longer count — only the resolved Node() and self.check() calls do
     save = await get_node(session, repo.id, "pkg.services.OrderService.save")
-    assert (save.degree_in, save.degree_out) == (1, 5)
+    assert (save.degree_in, save.degree_out) == (0, 2)
 
     communities = (
         await session.scalars(
             select(Community).where(Community.repository_id == repo.id)
         )
     ).all()
-    assert sum(c.node_count for c in communities) == SYMBOL_COUNT
+    clustered = [n for n in symbols if n.community_id is not None]
+    assert sum(c.node_count for c in communities) == len(clustered)
+    assert all(c.node_count >= 2 for c in communities)
     assert all(c.algorithm == "leiden" for c in communities)
 
     # community_edges must match cross-community counts recomputed from edges
     community_of = {n.id: n.community_id for n in symbols}
     rows = await session.execute(
-        select(Edge.src_id, Edge.dst_id).where(
+        # mirror load_graph: evidence-confidence edges, distinct pairs
+        select(Edge.src_id, Edge.dst_id)
+        .distinct()
+        .where(
             Edge.rel != EdgeRel.contains,
+            Edge.confidence != EdgeConfidence.name_match,
             Edge.src_id.in_(community_of),
             Edge.dst_id.in_(community_of),
         )
@@ -117,7 +138,7 @@ async def test_metrics_and_clustering(session, repo):
     assert stored == dict(expected)
 
     internal_total = sum(c.internal_edge_count for c in communities)
-    assert internal_total + sum(expected.values()) == NON_CONTAINS_EDGES
+    assert internal_total + sum(expected.values()) == METRICS_EDGES
 
 
 async def test_rerun_is_stable(session, repo):

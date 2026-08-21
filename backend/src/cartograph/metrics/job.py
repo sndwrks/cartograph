@@ -98,7 +98,12 @@ async def _recluster(
     groups: dict[int, set[int]] = defaultdict(set)
     for i, community_index in enumerate(membership):
         groups[community_index].add(node_ids[i])
-    member_sets = [groups[key] for key in sorted(groups)]
+    # singleton "communities" are just isolated vertices (no evidence edges);
+    # storing one row per isolated node bloats the table and makes the label
+    # carry-over loop quadratic — those nodes keep community_id NULL instead
+    member_sets = [
+        groups[key] for key in sorted(groups) if len(groups[key]) >= 2
+    ]
     community_of = {
         node_id: group_index
         for group_index, members in enumerate(member_sets)
@@ -108,7 +113,10 @@ async def _recluster(
     internal: Counter[int] = Counter()
     cross: Counter[tuple[int, int]] = Counter()
     for src, dst in edge_pairs:
-        src_group, dst_group = community_of[src], community_of[dst]
+        src_group = community_of.get(src)
+        dst_group = community_of.get(dst)
+        if src_group is None or dst_group is None:
+            continue
         if src_group == dst_group:
             internal[src_group] += 1
         else:

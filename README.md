@@ -71,6 +71,20 @@ summaries are cached on content hashes, so the expensive run is the first one.
 As an example here, an ~8,000 node, ~60,000 edge codebase cost ~$24 to generate
 everything.
 
+If you already pay for Claude Pro/Max, you can skip the API key for the LLM
+phases entirely and route them through the local Claude Code CLI instead,
+billed to your subscription:
+
+```sh
+pip install -e 'backend[claude-code]'
+python -m cartograph.enrich --repo NAME --provider claude-code
+```
+
+This needs the `claude` CLI installed and logged in on the host — it isn't
+available inside the backend Docker image. `--batch` still requires an
+Anthropic API key (Message Batches is an API-only product), and embeddings
+still require `VOYAGE_API_KEY` either way.
+
 Voyage issues a **keyless free tier** (3 requests/min, 10K tokens/min) that the
 embeddings phase will hit almost immediately on a real repository; see the
 throttle settings under [the embeddings retry loop](#the-embeddings-retry-loop).

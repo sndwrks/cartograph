@@ -1,16 +1,23 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Host-run tools (alembic, the ingest/enrich CLIs) read the repo-root .env so
+# nothing has to be exported by hand. Environment variables still win, which
+# is how the compose services keep their derived DATABASE_URL; inside the
+# image this path doesn't exist and is silently skipped.
+_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+
 
 class Settings(BaseSettings):
-    """Application settings read from the environment.
+    """Application settings read from the environment, then the repo .env.
 
     Every field has a default so importing this module never crashes; services
     that actually need a value (db access, MCP auth) validate at use time.
     """
 
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     DATABASE_URL: str = "postgresql+asyncpg://cartograph:change-me@db:5432/cartograph"
     ANTHROPIC_API_KEY: str = ""
@@ -30,6 +37,11 @@ class Settings(BaseSettings):
     # strictly sequential (~7s/node => ~17h for a 9k-node repo). Lower this if
     # the API starts returning 429s.
     ENRICH_CONCURRENCY: int = 12
+    # LLM provider for the docs/summaries/communities phases: "anthropic" (API,
+    # needs ANTHROPIC_API_KEY) or "claude-code" (local Claude Code CLI via the
+    # Agent SDK, subscription auth, host-only). claude-code spawns one CLI
+    # subprocess per concurrent call — consider ENRICH_CONCURRENCY=4 with it.
+    ENRICH_PROVIDER: str = "anthropic"
     # nodes per commit: an interrupted run loses at most this much work
     ENRICH_COMMIT_EVERY: int = 100
     # Anthropic Message Batches mode (enrich --batch): the API caps a batch at

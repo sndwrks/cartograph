@@ -1,21 +1,24 @@
 """Tier-1 TypeScript/JavaScript extractor built on tree-sitter (slice 04).
 
-One extractor covers .ts/.tsx/.js/.jsx; the grammar is picked per extension.
-tsconfig path aliases are passed in at construction (slice 05 wires them from
-the repo's tsconfig.json); the default registry instance has none.
+One extractor covers .ts/.tsx/.mts/.cts/.js/.jsx/.mjs/.cjs; the grammar is
+picked per extension. Repo-specific resolution (tsconfig path aliases,
+workspace packages, Meteor-style root-absolute imports) comes from the
+TsResolutionContext the ingest loader discovers per run and passes to
+extract(); without one, only relative specifiers resolve.
 """
 
 from __future__ import annotations
 
-import json
 import posixpath
 import re
+from typing import TYPE_CHECKING
 
 import tree_sitter_javascript as tsjavascript
 import tree_sitter_typescript as tstypescript
 from tree_sitter import Language, Node, Parser
 
 from .base import (
+    FieldAssignRecord,
     FileExtraction,
     ImportRecord,
     RefRecord,
@@ -23,13 +26,21 @@ from .base import (
     hash_content,
 )
 
+if TYPE_CHECKING:
+    from .ts_context import TsResolutionContext
+
 _LANGUAGES = {
     ".ts": Language(tstypescript.language_typescript()),
     ".tsx": Language(tstypescript.language_tsx()),
+    ".mts": Language(tstypescript.language_typescript()),
+    ".cts": Language(tstypescript.language_typescript()),
     ".js": Language(tsjavascript.language()),
     ".jsx": Language(tsjavascript.language()),
+    ".mjs": Language(tsjavascript.language()),
+    ".cjs": Language(tsjavascript.language()),
 }
 _EXTENSIONS = tuple(_LANGUAGES)
+_JS_EXTENSIONS = (".js", ".jsx", ".mjs", ".cjs")
 
 _FN_TYPES = ("arrow_function", "function_expression", "function")
 _DOTTED_RE = re.compile(r"^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$")
@@ -44,23 +55,6 @@ def module_qname_for_path(path: str) -> str:
     if parts[-1] == "index" and len(parts) >= 2:
         parts.pop()
     return ".".join(parts)
-
-
-def aliases_from_tsconfig(text: str) -> dict[str, str]:
-    """Extract {pattern: repo-path-target} from tsconfig paths/baseUrl.
-
-    Supports the common '@/*': ['src/*'] form, not full tsconfig semantics.
-    """
-    stripped = re.sub(r"^\s*//.*$", "", text, flags=re.MULTILINE)
-    options = json.loads(stripped).get("compilerOptions", {})
-    base_url = options.get("baseUrl", ".")
-    aliases: dict[str, str] = {}
-    for pattern, targets in options.get("paths", {}).items():
-        if targets:
-            aliases[pattern] = posixpath.normpath(
-                posixpath.join(base_url, targets[0])
-            )
-    return aliases
 
 
 def _qname_from_repo_path(path: str) -> str:
@@ -88,38 +82,74 @@ def _dotted(source: bytes, node: Node) -> str | None:
     return text if _DOTTED_RE.match(text) else None
 
 
+def _this_binds_to_class(node: Node) -> bool:
+    """True when `this` at this node is the class instance: reached from the
+    class body without crossing a plain function expression (whose `this` is
+    rebound by the caller). Arrow functions keep the lexical `this`."""
+    parent = node.parent
+    while parent is not None:
+        if parent.type in ("function_expression", "function_declaration", "function"):
+            return False
+        if parent.type in ("method_definition", "class_body"):
+            return True
+        parent = parent.parent
+    return True
+
+
 class TypeScriptExtractor:
     language = "typescript"
     extensions = _EXTENSIONS
 
-    def __init__(self, aliases: dict[str, str] | None = None):
-        self.aliases = aliases or {}
-
-    def _resolve_specifier(self, spec: str, importing_path: str) -> str:
+    def _resolve_specifier(
+        self,
+        spec: str,
+        importing_path: str,
+        context: TsResolutionContext | None = None,
+    ) -> str:
         if spec.startswith("."):
             joined = posixpath.normpath(
                 posixpath.join(posixpath.dirname(importing_path), spec)
             )
             return _qname_from_repo_path(joined)
-        for pattern, target in self.aliases.items():
-            if pattern.endswith("/*"):
-                prefix = pattern[:-1]
-                if spec.startswith(prefix):
-                    mapped = target.removesuffix("*") + spec[len(prefix) :]
-                    return _qname_from_repo_path(posixpath.normpath(mapped))
-            elif spec == pattern:
-                return _qname_from_repo_path(target)
+        if context is not None:
+            importing_dir = posixpath.dirname(importing_path)
+            if spec.startswith("/"):
+                # Meteor-style root-absolute import, relative to the app root
+                joined = posixpath.normpath(
+                    posixpath.join(
+                        context.nearest_package_dir(importing_dir),
+                        spec.lstrip("/"),
+                    )
+                )
+                # ".." segments escaping the repo namespace are not a real
+                # module; treat like an external specifier (dropped downstream)
+                if joined == ".." or joined.startswith("../"):
+                    return spec.replace("/", ".")
+                return _qname_from_repo_path(joined)
+            mapped = context.resolve_alias(spec, importing_dir)
+            if mapped is None:
+                mapped = context.resolve_workspace(spec)
+            if mapped is not None:
+                return _qname_from_repo_path(posixpath.normpath(mapped))
         # external ("react", "lodash/fp"): the resolver drops what it can't find
         return spec.replace("/", ".")
 
-    def _collect_imports(self, source: bytes, root: Node, path: str) -> list[ImportRecord]:
+    def _collect_imports(
+        self,
+        source: bytes,
+        root: Node,
+        path: str,
+        context: TsResolutionContext | None = None,
+    ) -> list[ImportRecord]:
         records: list[ImportRecord] = []
 
         def module_for(node: Node) -> str | None:
             src_node = node.child_by_field_name("source")
             if src_node is None:
                 return None
-            return self._resolve_specifier(_string_value(source, src_node), path)
+            return self._resolve_specifier(
+                _string_value(source, src_node), path, context
+            )
 
         def visit(node: Node) -> None:
             if node.type == "import_statement":
@@ -207,7 +237,7 @@ class TypeScriptExtractor:
                 if (
                     value is not None
                     and name is not None
-                    and name.type == "identifier"
+                    and name.type in ("identifier", "object_pattern")
                     and value.type == "call_expression"
                 ):
                     fn = value.child_by_field_name("function")
@@ -220,26 +250,55 @@ class TypeScriptExtractor:
                         and args.named_children[0].type == "string"
                     ):
                         spec = _string_value(source, args.named_children[0])
-                        records.append(
-                            ImportRecord(
-                                _text(source, name),
-                                self._resolve_specifier(spec, path),
-                                _line(node),
+                        module = self._resolve_specifier(spec, path, context)
+                        line = _line(node)
+                        if name.type == "identifier":
+                            records.append(
+                                ImportRecord(_text(source, name), module, line)
                             )
-                        )
+                        else:
+                            # const { app, dialog: d } = require("electron")
+                            for prop in name.named_children:
+                                if prop.type == "shorthand_property_identifier_pattern":
+                                    prop_name = _text(source, prop)
+                                    records.append(
+                                        ImportRecord(
+                                            prop_name, f"{module}.{prop_name}", line
+                                        )
+                                    )
+                                elif prop.type == "pair_pattern":
+                                    key = prop.child_by_field_name("key")
+                                    val = prop.child_by_field_name("value")
+                                    if (
+                                        key is not None
+                                        and val is not None
+                                        and val.type == "identifier"
+                                    ):
+                                        records.append(
+                                            ImportRecord(
+                                                _text(source, val),
+                                                f"{module}.{_text(source, key)}",
+                                                line,
+                                            )
+                                        )
             for child in node.named_children:
                 visit(child)
 
         visit(root)
         return records
 
-    def extract(self, path: str, source: bytes) -> FileExtraction:
+    def extract(
+        self,
+        path: str,
+        source: bytes,
+        context: TsResolutionContext | None = None,
+    ) -> FileExtraction:
         module_qname = module_qname_for_path(path)
         ext = "." + path.rsplit(".", 1)[-1]
         parser = Parser(_LANGUAGES.get(ext, _LANGUAGES[".ts"]))
         root = parser.parse(source).root_node
 
-        imports = self._collect_imports(source, root, path)
+        imports = self._collect_imports(source, root, path, context)
         imported_locals = {rec.local_name for rec in imports if rec.local_name != "*"}
 
         end_line = max(1, source.count(b"\n") + (0 if source.endswith(b"\n") else 1))
@@ -254,6 +313,7 @@ class TypeScriptExtractor:
             )
         ]
         refs: list[RefRecord] = []
+        field_assigns: list[FieldAssignRecord] = []
         scopes: list[tuple[str, str]] = [("module", module_qname)]
 
         def span_for(node: Node) -> Node:
@@ -436,6 +496,64 @@ class TypeScriptExtractor:
                     else:
                         visit(declarator)
                 return
+            if node.type == "assignment_expression":
+                left = node.child_by_field_name("left")
+                right = node.child_by_field_name("right")
+                if (
+                    left is not None
+                    and right is not None
+                    and left.type == "member_expression"
+                    and right.type == "new_expression"
+                ):
+                    obj = left.child_by_field_name("object")
+                    prop = left.child_by_field_name("property")
+                    ctor = right.child_by_field_name("constructor")
+                    cls = next(
+                        (q for k, q in reversed(scopes) if k == "class"), None
+                    )
+                    if (
+                        obj is not None
+                        and prop is not None
+                        and ctor is not None
+                        and cls is not None
+                        and _text(source, obj) == "this"
+                        and _this_binds_to_class(node)
+                    ):
+                        ctor_text = _dotted(source, ctor)
+                        if ctor_text is not None:
+                            field_assigns.append(
+                                FieldAssignRecord(
+                                    cls,
+                                    _text(source, prop),
+                                    ctor_text,
+                                    _line(node),
+                                )
+                            )
+            elif (
+                node.type in ("public_field_definition", "field_definition")
+                and scopes[-1][0] == "class"
+            ):
+                # class property initializer: `svc = new OrderService()`
+                prop = node.child_by_field_name("name")
+                value = node.child_by_field_name("value")
+                if (
+                    prop is not None
+                    and value is not None
+                    and value.type == "new_expression"
+                ):
+                    ctor = value.child_by_field_name("constructor")
+                    ctor_text = (
+                        _dotted(source, ctor) if ctor is not None else None
+                    )
+                    if ctor_text is not None:
+                        field_assigns.append(
+                            FieldAssignRecord(
+                                scopes[-1][1],
+                                _text(source, prop),
+                                ctor_text,
+                                _line(node),
+                            )
+                        )
             if node.type == "call_expression":
                 fn = node.child_by_field_name("function")
                 if fn is not None:
@@ -483,9 +601,10 @@ class TypeScriptExtractor:
 
         return FileExtraction(
             path=path,
-            language="javascript" if ext in (".js", ".jsx") else "typescript",
+            language="javascript" if ext in _JS_EXTENSIONS else "typescript",
             module_qname=module_qname,
             symbols=symbols,
             imports=imports,
             refs=refs,
+            field_assigns=field_assigns,
         )
