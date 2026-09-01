@@ -6,6 +6,7 @@ import type {
   CommunityGraphResponse,
   EgoResponse,
   ImpactResponse,
+  IngestRunOut,
   KbEntryOut,
   KbStatus,
   KbTypeOut,
@@ -14,8 +15,12 @@ import type {
   NodeOut,
   OverviewResponse,
   RelatedKbTerm,
+  RepoOut,
   SearchResponse,
   ThreadRootOut,
+  UsageCallOut,
+  UsageSummaryResponse,
+  UsageWindow,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -125,7 +130,7 @@ const del = async (path: string): Promise<void> => {
   await unwrap<void>(await fetch(`${BASE}${path}`, { method: "DELETE" }));
 };
 
-export const fetchRepos = () => get<{ repos: string[] }>("/repos");
+export const fetchRepos = () => get<{ repos: RepoOut[] }>("/repos");
 
 export const fetchOverview = (repo: string) =>
   get<OverviewResponse>("/overview", { repo });
@@ -255,4 +260,30 @@ export const searchCode = (
     mode: opts?.mode,
     kinds: opts?.kinds,
     limit: opts?.limit,
+  });
+
+// --- ingest runs ---
+
+export const fetchIngestRuns = (repo: string, limit = 5) =>
+  get<{ runs: IngestRunOut[] }>("/ingest/runs", { repo, limit });
+
+export const fetchIngestRun = (runId: number) =>
+  get<IngestRunOut>(`/ingest/runs/${runId}`);
+
+// --- MCP tool usage ---
+
+export const fetchUsageSummary = (repo: string, window: UsageWindow) =>
+  get<UsageSummaryResponse>("/usage/summary", { repo, window });
+
+export const fetchUsageCalls = (
+  repo: string,
+  opts?: { tool?: string; agent?: string; limit?: number; before?: number; window?: UsageWindow },
+) =>
+  get<{ calls: UsageCallOut[] }>("/usage/calls", {
+    repo,
+    tool: opts?.tool,
+    agent: opts?.agent,
+    limit: opts?.limit,
+    window: opts?.window,
+    before: opts?.before,
   });

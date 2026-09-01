@@ -72,6 +72,35 @@ class Settings(BaseSettings):
     # it, e.g. in the minutes after adding a payment method while the new
     # limits propagate.
     EMBED_MIN_INTERVAL_S: float = 0.0
+    # MCP usage recording (mcp_server/usage.py). One tool_calls row per
+    # tools/call, written inline after the tool returns; the kill switch is
+    # for incident response, not tuning — recording never fails a call.
+    USAGE_RECORDING: bool = True
+    # bytes -> token estimate, applied at READ time (rows store bytes). ~4 is
+    # the usual English/code average; pretty-printed JSON tokenizes worse
+    # (~3.2) and dense source better (~3.8), so the dashboard labels every
+    # token figure as an estimate. Retune here, nothing gets rewritten.
+    USAGE_CHARS_PER_TOKEN: float = 4.0
+    # string arguments longer than this are truncated in the stored
+    # `arguments` (post_message bodies, kb_propose bodies); request_bytes is
+    # measured before truncation so the size is still right
+    USAGE_ARG_MAX_CHARS: int = 500
+    # results larger than this skip the json parse that feeds result_meta and
+    # the baseline — response_bytes is still recorded
+    USAGE_PARSE_MAX_BYTES: int = 2_000_000
+    # per-file cap on the baseline. An agent reading a file without the graph
+    # does not read all of it: Claude Code's Read shows 2000 lines by default,
+    # ~80KB of typical source, so a 1MB generated file must not count as 1MB
+    # of avoided reading.
+    USAGE_BASELINE_FILE_CAP_BYTES: int = 80_000
+    # rows waiting for the single recorder task. The request path only
+    # enqueues; when the database falls this far behind, rows are dropped
+    # (with a throttled warning) rather than queued without bound
+    USAGE_QUEUE_MAX: int = 1000
+    # tool_calls rows older than this are deleted by the recorder, at most
+    # once an hour. 0 disables pruning. The dashboard's aggregates scan the
+    # whole window, so this is what keeps them bounded on a busy instance.
+    USAGE_RETENTION_DAYS: int = 90
 
 
 @lru_cache

@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cartograph.api.schemas import RepositoryOut
 from cartograph.db import get_session
 from cartograph.query import graph as q
 
@@ -26,7 +27,9 @@ def _found(result, what: str = "resource"):
 
 @router.get("/repos")
 async def repos(session: SessionDep) -> dict:
-    return {"repos": await q.repositories(session)}
+    return {
+        "repos": [RepositoryOut.from_repository(r) for r in await q.repositories(session)]
+    }
 
 
 @router.get("/overview")

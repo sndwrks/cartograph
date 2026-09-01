@@ -10,6 +10,7 @@ from cartograph.config import get_settings
 from cartograph.db import get_sessionmaker
 from cartograph.mcp_server import tools
 from cartograph.mcp_server.auth import BearerAuthMiddleware
+from cartograph.mcp_server.usage import UsageMiddleware
 
 INSTRUCTIONS = (
     "Cartograph exposes a persistent knowledge graph of one or more code "
@@ -26,9 +27,17 @@ INSTRUCTIONS = (
 )
 
 
-def build_mcp_server() -> MCPServer:
-    server = MCPServer("cartograph", instructions=INSTRUCTIONS)
-    sessionmaker = get_sessionmaker()
+def build_mcp_server(
+    sessionmaker=None, usage: UsageMiddleware | None = None
+) -> MCPServer:
+    """`sessionmaker` and `usage` are injectable so an in-process test client
+    can run the whole chain inside its rolled-back transaction and then
+    `drain()` the recorder before asserting on rows."""
+    if sessionmaker is None:
+        sessionmaker = get_sessionmaker()
+    if usage is None:
+        usage = UsageMiddleware(sessionmaker)
+    server = MCPServer("cartograph", instructions=INSTRUCTIONS, middleware=[usage])
 
     @server.tool(
         description=(

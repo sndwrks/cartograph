@@ -10,6 +10,8 @@ import {
   fetchThreads,
 } from "../api/client";
 import type { MessageOut, ThreadRootOut } from "../api/types";
+import { useRepoUuid } from "../hooks/useRepoUuid";
+import { nodePath } from "../routes";
 import {
   Button,
   cx,
@@ -161,6 +163,7 @@ export default function ThreadList({
   repo?: string;
 }) {
   const [expanded, setExpanded] = useState<number | null>(null);
+  const uuid = useRepoUuid() ?? "";
   const threads = useQuery({
     queryKey: ["messages", "threads", nodeId ?? null, agentId ?? null, repo ?? null],
     queryFn: () => fetchThreads({ nodeId, agentId, repo }),
@@ -223,7 +226,7 @@ export default function ThreadList({
       {roots.map(({ message, reply_count }) => (
         <li key={message.id}>
           {nodeId === undefined && message.node_id !== null && (
-            <Link to={`/n/${message.node_id}`} className={styles.anchor}>
+            <Link to={nodePath(uuid, message.node_id)} className={styles.anchor}>
               {anchorNames.get(message.node_id) ?? `#${message.node_id}`}
             </Link>
           )}

@@ -9,6 +9,8 @@ import GraphCanvas, {
   type CanvasNode,
 } from "../components/GraphCanvas";
 import { radiusScale, toCanvasLink, toCanvasNode } from "../graphStyle";
+import { useRepoUuid } from "../hooks/useRepoUuid";
+import { communityPath, graphPath } from "../routes";
 import { useAppStore } from "../store";
 import { COMMUNITY_COLOR, EDGE_COLOR } from "../theme";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui";
@@ -21,6 +23,7 @@ export default function CommunityView() {
   const params = useParams();
   const communityId = Number(params.communityId);
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
   const repo = useAppStore((state) => state.repo);
   const selectedNodeId = useAppStore((state) => state.selectedNodeId);
   const setSelectedNodeId = useAppStore((state) => state.setSelectedNodeId);
@@ -85,7 +88,7 @@ export default function CommunityView() {
   return (
     <div className={viewFrameStyles.viewFrame}>
       <div className={viewFrameStyles.viewToolbar}>
-        <Breadcrumbs crumbs={[{ label: "Overview", to: "/graph" }, { label }]} />
+        <Breadcrumbs crumbs={[{ label: "Overview", to: graphPath(uuid) }, { label }]} />
         <div className={viewFrameStyles.toolbarControls}>
           <label>
             top
@@ -121,7 +124,7 @@ export default function CommunityView() {
             selectedId={selectedNodeId}
             onNodeClick={(node) => {
               if (typeof node.id === "string") {
-                navigate(`/c/${node.id.replace("phantom-", "")}`);
+                navigate(communityPath(uuid, Number(node.id.replace("phantom-", ""))));
               } else {
                 setSelectedNodeId(node.id);
                 requestFocus(node.id);

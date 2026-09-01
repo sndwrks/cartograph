@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { KbEntryOut } from "../../api/types";
+import { useRepoUuid } from "../../hooks/useRepoUuid";
+import { kbEditPath } from "../../routes";
 import {
   Button,
   Dialog,
@@ -40,6 +42,7 @@ export default function ProposalCard({
   error,
 }: Props) {
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
   const [reason, setReason] = useState("");
 
   return (
@@ -88,7 +91,7 @@ export default function ProposalCard({
             human publishing something almost-right. */}
         <Button
           disabled={busy}
-          onClick={() => navigate(`/kb/${proposal.id}/edit`)}
+          onClick={() => navigate(kbEditPath(uuid, proposal.id))}
         >
           Edit &amp; publish
         </Button>

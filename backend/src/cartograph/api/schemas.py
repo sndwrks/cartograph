@@ -15,7 +15,19 @@ from cartograph.models import (
     IngestRun,
     KnowledgeEntry,
     Node,
+    Repository,
+    ToolCall,
 )
+
+
+class RepositoryOut(BaseModel):
+    id: int
+    uuid: str  # the SPA's URL identifier (`/repo/<uuid>/...`)
+    name: str  # what every other endpoint's `repo=` parameter takes
+
+    @classmethod
+    def from_repository(cls, repo: Repository) -> RepositoryOut:
+        return cls(id=repo.id, uuid=str(repo.uuid), name=repo.name)
 
 
 class NodeOut(BaseModel):
@@ -258,4 +270,140 @@ class IngestRunOut(BaseModel):
             finished_at=run.finished_at,
             stats=run.stats,
             error=run.error if include_error else None,
+        )
+
+
+# --- usage dashboard (tool_calls) -------------------------------------------
+
+
+def _tokens(nbytes: int, chars_per_token: float) -> int:
+    return int(round(nbytes / chars_per_token)) if chars_per_token > 0 else 0
+
+
+class UsageTotals(BaseModel):
+    calls: int
+    errors: int
+    unscoped_calls: int  # rows with no repository — included in every repo's view
+    agents: int
+    response_bytes: int
+    request_bytes: int
+    # the next four are over calls that HAVE a baseline (graph tools only),
+    # so the ratio compares like with like
+    baseline_calls: int
+    baseline_bytes: int
+    baseline_response_bytes: int
+    baseline_files: int
+    est_tokens_returned: int
+    est_tokens_baseline: int
+    est_tokens_saved: int
+    # saved / baseline over baseline rows; None when nothing has a baseline.
+    # Can go negative — a tool that returns more than the files it stands in
+    # for is a finding, not a bug in the ratio.
+    savings_ratio: float | None
+
+
+class UsageByTool(BaseModel):
+    tool: str
+    calls: int
+    errors: int
+    avg_duration_ms: float
+    p50_duration_ms: float
+    response_bytes: int
+    baseline_bytes: int
+
+
+class UsageBucket(BaseModel):
+    start: datetime.datetime
+    calls: int
+    errors: int
+    response_bytes: int
+    baseline_bytes: int
+    baseline_response_bytes: int  # response bytes over the rows that have a baseline
+
+
+class UsageAgent(BaseModel):
+    name: str
+    calls: int
+    errors: int
+    last_call: datetime.datetime
+
+
+class UsageSummaryOut(BaseModel):
+    window: str
+    bucket: str  # "hour" | "day"
+    chars_per_token: float
+    totals: UsageTotals
+    by_tool: list[UsageByTool]
+    buckets: list[UsageBucket]
+    agents: list[UsageAgent]
+
+    @classmethod
+    def from_query(cls, result: dict, chars_per_token: float) -> UsageSummaryOut:
+        t = result["totals"]
+        saved_bytes = t["baseline_bytes"] - t["baseline_response_bytes"]
+        totals = UsageTotals(
+            **t,
+            est_tokens_returned=_tokens(t["response_bytes"], chars_per_token),
+            est_tokens_baseline=_tokens(t["baseline_bytes"], chars_per_token),
+            est_tokens_saved=_tokens(saved_bytes, chars_per_token),
+            savings_ratio=(
+                saved_bytes / t["baseline_bytes"] if t["baseline_bytes"] > 0 else None
+            ),
+        )
+        return cls(
+            window=result["window"],
+            bucket=result["bucket"],
+            chars_per_token=chars_per_token,
+            totals=totals,
+            by_tool=[
+                UsageByTool(
+                    **{**r, "avg_duration_ms": float(r["avg_duration_ms"] or 0),
+                       "p50_duration_ms": float(r["p50_duration_ms"] or 0)}
+                )
+                for r in result["by_tool"]
+            ],
+            buckets=[UsageBucket(**r) for r in result["buckets"]],
+            agents=[UsageAgent(**r) for r in result["agents"]],
+        )
+
+
+class ToolCallOut(BaseModel):
+    id: int
+    tool: str
+    repository: str | None
+    repo_arg: str | None
+    agent_name: str | None
+    client_session: str | None
+    arguments: dict
+    request_bytes: int
+    started_at: datetime.datetime
+    duration_ms: int
+    ok: bool
+    error_kind: str | None
+    error: str | None
+    response_bytes: int
+    baseline_bytes: int | None
+    baseline_files: int | None
+    result_meta: dict | None
+
+    @classmethod
+    def from_call(cls, call: ToolCall, repository: str | None) -> ToolCallOut:
+        return cls(
+            id=call.id,
+            tool=call.tool,
+            repository=repository,
+            repo_arg=call.repo_arg,
+            agent_name=call.agent_name,
+            client_session=call.client_session,
+            arguments=call.arguments,
+            request_bytes=call.request_bytes,
+            started_at=call.started_at,
+            duration_ms=call.duration_ms,
+            ok=call.ok,
+            error_kind=call.error_kind,
+            error=call.error,
+            response_bytes=call.response_bytes,
+            baseline_bytes=call.baseline_bytes,
+            baseline_files=call.baseline_files,
+            result_meta=call.result_meta,
         )

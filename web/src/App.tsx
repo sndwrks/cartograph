@@ -1,21 +1,18 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
-import {
-  BrowserRouter,
-  Navigate,
-  Route,
-  Routes,
-  useLocation,
-} from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import styles from "./App.module.css";
+import RepoScope, { LegacyRedirect, RootRedirect } from "./components/RepoScope";
 import SearchPalette from "./components/SearchPalette";
 import SidePanel from "./components/SidePanel";
 import TopBar from "./components/TopBar";
+import { CHILD, LEGACY_ROUTES, REPO_SCOPE, isGraphRoute, parseView } from "./routes";
 import { useAppStore } from "./store";
 import { TooltipProvider } from "./ui";
 import BoardView from "./views/BoardView";
 import CommunityView from "./views/CommunityView";
+import DashboardView from "./views/DashboardView";
 import EgoView from "./views/EgoView";
 import KbEditorView from "./views/KbEditorView";
 import KbReviewView from "./views/KbReviewView";
@@ -32,49 +29,48 @@ function RouteSync() {
   const setView = useAppStore((state) => state.setView);
 
   useEffect(() => {
-    const community = pathname.match(/^\/c\/(\d+)$/);
-    const node = pathname.match(/^\/n\/(\d+)$/);
-    if (community) {
-      setView({ mode: "community", id: Number(community[1]) });
-    } else if (node) {
-      setView({ mode: "ego", nodeId: Number(node[1]) });
-    } else {
-      setView({ mode: "overview" });
-    }
+    setView(parseView(pathname));
   }, [pathname, setView]);
 
   return null;
 }
 
-// The side panel is a fixed sibling of the canvas inside the workspace grid and
-// belongs to the GRAPH routes only — it renders god nodes or node detail, which
-// mean nothing anywhere else. An allowlist rather than a "not /board" denylist:
-// the denylist was right with one full-width page, went wrong at the second,
-// and rendered an empty panel on any unmatched URL. With the panel absent,
-// .workspace's `auto` track just collapses.
-const GRAPH_ROUTE = /^\/(graph|c\/\d+|n\/\d+)$/;
-
 function Workspace() {
   const { pathname } = useLocation();
-  const showSidePanel = GRAPH_ROUTE.test(pathname);
+  // The side panel is a fixed sibling of the canvas inside the workspace grid
+  // and belongs to the GRAPH routes only — it renders god nodes or node
+  // detail, which mean nothing anywhere else. With the panel absent,
+  // .workspace's `auto` track just collapses. (The allowlist itself lives in
+  // routes.ts next to the other path matchers.)
+  const showSidePanel = isGraphRoute(pathname);
 
   return (
     <div className={styles.workspace}>
       <main className={styles.canvasArea}>
         <Routes>
-          {/* The graph lives at /graph so every section has a real name and
-              the tab strip has something to match; / just forwards to it. */}
-          <Route path="/" element={<Navigate to="/graph" replace />} />
-          <Route path="/graph" element={<Overview />} />
-          <Route path="/c/:communityId" element={<CommunityView />} />
-          <Route path="/n/:nodeId" element={<EgoView />} />
-          <Route path="/board" element={<BoardView />} />
-          {/* Selection lives in ?sel=, not a path segment: the index and the
-              detail share one fetch, and this way it deep-links. */}
-          <Route path="/kb" element={<KbView />} />
-          <Route path="/kb/review" element={<KbReviewView />} />
-          <Route path="/kb/new" element={<KbEditorView />} />
-          <Route path="/kb/:entryId/edit" element={<KbEditorView />} />
+          <Route path="/" element={<RootRedirect />} />
+          {/* Everything is scoped to one repo by URL: RepoScope resolves the
+              uuid, writes the name into the store, and renders the page. */}
+          <Route path={REPO_SCOPE} element={<RepoScope />}>
+            <Route index element={<DashboardView />} />
+            <Route path={CHILD.graph} element={<Overview />} />
+            <Route path={CHILD.community} element={<CommunityView />} />
+            <Route path={CHILD.node} element={<EgoView />} />
+            <Route path={CHILD.board} element={<BoardView />} />
+            {/* Selection lives in ?sel=, not a path segment: the index and
+                the detail share one fetch, and this way it deep-links. */}
+            <Route path={CHILD.kb} element={<KbView />} />
+            <Route path={CHILD.kbReview} element={<KbReviewView />} />
+            <Route path={CHILD.kbNew} element={<KbEditorView />} />
+            <Route path={CHILD.kbEdit} element={<KbEditorView />} />
+            <Route path="*" element={<RootRedirect />} />
+          </Route>
+          {/* Bookmarks from before the repo prefix: the old path is exactly
+              the scoped suffix, so each just gets prefixed. */}
+          {LEGACY_ROUTES.map((root) => (
+            <Route key={root} path={`${root}/*`} element={<LegacyRedirect />} />
+          ))}
+          <Route path="*" element={<RootRedirect />} />
         </Routes>
       </main>
       {showSidePanel && <SidePanel />}

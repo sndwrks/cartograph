@@ -51,6 +51,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # the mcp service never migrates (it runs the module directly, not the
+      # entrypoint); api's healthcheck only passes after `alembic upgrade
+      # head`, so waiting on it means tool_calls exists before the first call
+      # is recorded. `required: false`: if api fails its healthcheck the MCP
+      # server still starts — recording tolerates a missing table, and agents
+      # must not lose graph access over a metrics table.
+      api:
+        condition: service_healthy
+        required: false
     healthcheck:
       # /healthz is the only route exempt from bearer auth
       test: ["CMD", "curl", "-fsS", "http://localhost:8765/healthz"]

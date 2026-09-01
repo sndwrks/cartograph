@@ -6,6 +6,8 @@ import { fetchGodNodes } from "../api/client";
 import type { EgoResponse, NodeOut } from "../api/types";
 import KindBadge from "./KindBadge";
 import { Gear } from "./icons";
+import { useRepoUuid } from "../hooks/useRepoUuid";
+import { nodePath } from "../routes";
 import { useAppStore } from "../store";
 import {
   Button,
@@ -29,6 +31,7 @@ export default function GodNodeList() {
   const setSelectedNodeId = useAppStore((state) => state.setSelectedNodeId);
   const requestFocus = useAppStore((state) => state.requestFocus);
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
   const queryClient = useQueryClient();
 
   const [threshold, setThreshold] = useState(DEFAULT_CAUTION_THRESHOLD);
@@ -56,7 +59,7 @@ export default function GodNodeList() {
       if (node.community_id === view.id) {
         requestFocus(node.id); // pan + highlight in place
       } else {
-        navigate(`/n/${node.id}`);
+        navigate(nodePath(uuid, node.id));
       }
       return;
     }
@@ -70,11 +73,11 @@ export default function GodNodeList() {
       if (ego?.nodes.some((candidate) => candidate.id === node.id)) {
         requestFocus(node.id);
       } else {
-        navigate(`/n/${node.id}`);
+        navigate(nodePath(uuid, node.id));
       }
       return;
     }
-    navigate(`/n/${node.id}`);
+    navigate(nodePath(uuid, node.id));
   };
 
   return (

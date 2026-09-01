@@ -6,6 +6,8 @@ import { fetchKbEntries, fetchKbEntry, fetchKbTypes } from "../api/client";
 import KbEntryDetail from "../components/kb/KbEntryDetail";
 import KbList from "../components/kb/KbList";
 import { useDebounced } from "../hooks/useDebounced";
+import { useRepoUuid } from "../hooks/useRepoUuid";
+import { kbNewPath, kbReviewPath } from "../routes";
 import { useAppStore } from "../store";
 import {
   Badge,
@@ -30,6 +32,7 @@ export default function KbView() {
   const repo = useAppStore((state) => state.repo);
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
 
   // Selection and filters live in the URL, not component state, so the page
   // deep-links and browser back/forward move the selection.
@@ -134,12 +137,12 @@ export default function KbView() {
 
         <div className={styles.actions}>
           {pending > 0 && (
-            <Button variant="ghost" onClick={() => navigate("/kb/review")}>
+            <Button variant="ghost" onClick={() => navigate(kbReviewPath(uuid))}>
               <Badge variant="danger">{pending}</Badge>
               &nbsp;proposal{pending === 1 ? "" : "s"}
             </Button>
           )}
-          <Button variant="primary" onClick={() => navigate("/kb/new")}>
+          <Button variant="primary" onClick={() => navigate(kbNewPath(uuid))}>
             New entry
           </Button>
         </div>

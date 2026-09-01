@@ -338,3 +338,35 @@ async def test_upsert_nodes_dedupes_within_batch(session, repo_root):
     assert inserted == 1
     node = await session.get(Node, ids["bundle.To"])
     assert node.content_hash == "last"
+
+
+async def test_file_nodes_carry_size_bytes(session, repo_root):
+    repo = await register(session, repo_root)
+    await ingest_repo(session, repo)
+
+    rows = (
+        await session.execute(
+            select(Node.qualified_name, Node.kind, Node.size_bytes).where(
+                Node.repository_id == repo.id
+            )
+        )
+    ).all()
+    files = {q: size for q, kind, size in rows if kind is NodeKind.file}
+    assert set(files) == ALL_PATHS
+    for path, size in files.items():
+        assert size == (repo_root / path).stat().st_size
+    # only file rows are sized
+    assert all(size is None for _, kind, size in rows if kind is not NodeKind.file)
+
+    # a re-ingest refreshes it (upsert, not insert-only)
+    util = repo_root / "pkg" / "util.py"
+    util.write_text(util.read_text() + "\n# trailing comment\n")
+    await ingest_repo(session, repo)
+    size = await session.scalar(
+        select(Node.size_bytes).where(
+            Node.repository_id == repo.id,
+            Node.kind == NodeKind.file,
+            Node.qualified_name == "pkg/util.py",
+        )
+    )
+    assert size == util.stat().st_size

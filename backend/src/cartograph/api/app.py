@@ -1,6 +1,6 @@
 from fastapi import APIRouter, FastAPI
 
-from cartograph.api.routers import agents, graph, ingest, kb, messages, search
+from cartograph.api.routers import agents, graph, ingest, kb, messages, search, usage
 
 
 def create_app() -> FastAPI:
@@ -18,6 +18,7 @@ def create_app() -> FastAPI:
     router.include_router(agents.router)
     router.include_router(messages.router)
     router.include_router(ingest.router)
+    router.include_router(usage.router)
 
     app.include_router(router)
     return app
