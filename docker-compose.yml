@@ -38,7 +38,11 @@ services:
     ports:
       - "5173:80"
     depends_on:
-      - api
+      # healthy, not merely started: nginx should come up after the api it
+      # proxies is answering (nginx.conf also resolves `api` lazily, so this
+      # is ordering hygiene rather than the thing that prevents the crash)
+      api:
+        condition: service_healthy
 
   mcp:
     build: ./backend
