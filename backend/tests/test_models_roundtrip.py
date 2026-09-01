@@ -17,6 +17,7 @@ from cartograph.models import (
     Node,
     NodeKind,
     Repository,
+    ToolCall,
 )
 
 
@@ -162,3 +163,37 @@ async def test_ingest_run_roundtrip(session: AsyncSession) -> None:
     assert got.trigger == "manual"
     assert got.status == "running"
     assert got.stats == {"files_changed": 3, "timings": {"walk": 0.01}}
+
+
+async def test_repository_uuid_is_server_generated(session: AsyncSession) -> None:
+    repo = await _make_repo(session)
+    await session.refresh(repo)
+    other = Repository(name="other", root_path="/repos/other")
+    session.add(other)
+    await session.flush()
+    await session.refresh(other)
+    assert repo.uuid is not None and repo.uuid != other.uuid
+
+
+async def test_tool_call_roundtrip(session: AsyncSession) -> None:
+    repo = await _make_repo(session)
+    call = ToolCall(
+        tool="search_code",
+        repository_id=repo.id,
+        repo_arg="test-repo",
+        arguments={"query": "x"},
+        request_bytes=14,
+        duration_ms=12,
+        ok=True,
+        response_bytes=200,
+        baseline_bytes=1000,
+        baseline_files=2,
+        result_meta={"n_results": 1},
+    )
+    session.add(call)
+    await session.flush()
+    got = await session.get(ToolCall, call.id)
+    assert got is not None
+    assert got.ok is True and got.error_kind is None
+    assert isinstance(got.started_at, datetime.datetime)
+    assert got.arguments == {"query": "x"} and got.result_meta == {"n_results": 1}

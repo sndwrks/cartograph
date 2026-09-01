@@ -36,7 +36,8 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  // null until TopBar picks the first name from the /repos response
+  // The repo NAME (what every fetcher's `repo=` wants); null until RepoScope
+  // resolves the URL's /repo/<uuid> against the /repos list and writes it.
   repo: null,
   view: { mode: "overview" },
   selectedNodeId: null,
@@ -44,7 +45,11 @@ export const useAppStore = create<AppState>((set) => ({
   minConfidence: null,
   focusRequest: null,
   paletteOpen: false,
-  setRepo: (repo) => set({ repo, selectedNodeId: null }),
+  // Idempotent: RepoScope calls this from an effect on every resolve, and a
+  // no-op write must not clear the selection — only a real repo change
+  // invalidates a selected node id.
+  setRepo: (repo) =>
+    set((state) => (state.repo === repo ? {} : { repo, selectedNodeId: null })),
   setView: (view) => set({ view }),
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
   setPaletteOpen: (open) => set({ paletteOpen: open }),

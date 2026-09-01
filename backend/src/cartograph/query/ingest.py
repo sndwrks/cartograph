@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from sqlalchemy import delete, func, literal_column, select
+from sqlalchemy import Table, delete, func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -144,13 +144,21 @@ async def delete_stale_nodes_for_path(
 
 # asyncpg binds parameters as int16, so a single statement can carry at most
 # 32767 of them; a full ingest of a mid-size repo blows past that in one batch.
-# Chunk by row width and leave headroom.
+# Chunk by rendered row width and leave headroom. The rendered width exceeds
+# the dict width: a multi-VALUES insert also binds each column with a
+# Python-side default (Node.degree_in/degree_out/pagerank) once per row.
 _MAX_BIND_PARAMS = 30000
 
 
-def _param_chunks(rows: list[dict]) -> Iterable[list[dict]]:
-    width = max((len(row) for row in rows), default=1)
-    size = max(1, _MAX_BIND_PARAMS // max(1, width))
+def _param_chunks(rows: list[dict], table: Table) -> Iterable[list[dict]]:
+    keys = set().union(*(row.keys() for row in rows)) if rows else set()
+    defaulted = sum(
+        1
+        for col in table.columns
+        if col.key not in keys and col.default is not None
+    )
+    width = max(1, len(keys) + defaulted)
+    size = max(1, _MAX_BIND_PARAMS // width)
     for start in range(0, len(rows), size):
         yield rows[start : start + size]
 
@@ -173,7 +181,7 @@ async def upsert_nodes(
     rows = list(unique.values())
     ids: dict[str, int] = {}
     inserted = 0
-    for chunk in _param_chunks(rows):
+    for chunk in _param_chunks(rows, Node.__table__):
         chunk_ids, chunk_inserted = await _upsert_nodes_chunk(session, chunk)
         ids.update(chunk_ids)
         inserted += chunk_inserted
@@ -192,6 +200,7 @@ async def _upsert_nodes_chunk(
             "start_line": stmt.excluded.start_line,
             "end_line": stmt.excluded.end_line,
             "content_hash": stmt.excluded.content_hash,
+            "size_bytes": stmt.excluded.size_bytes,
             "updated_at": func.now(),
         },
         # xmax = 0 distinguishes a freshly inserted row from a conflicted
@@ -212,7 +221,7 @@ async def insert_edges_ignore_conflicts(
     if not rows:
         return 0
     inserted = 0
-    for chunk in _param_chunks(rows):
+    for chunk in _param_chunks(rows, Edge.__table__):
         stmt = pg_insert(Edge).values(chunk).on_conflict_do_nothing(
             index_elements=["src_id", "dst_id", "rel", "src_line"]
         )

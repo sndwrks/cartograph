@@ -1,8 +1,8 @@
-import { useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
+import { useRepoUuid } from "../hooks/useRepoUuid";
 import { useRepos } from "../hooks/useRepos";
-import { useAppStore } from "../store";
+import { boardPath, graphPath, isGraphRoute, kbPath, repoPath, rescopePath } from "../routes";
 import { GraphMark } from "./Logo";
 import {
   PageTab,
@@ -16,79 +16,76 @@ import {
 import styles from "./TopBar.module.css";
 
 export default function TopBar() {
-  const repo = useAppStore((state) => state.repo);
-  const setRepo = useAppStore((state) => state.setRepo);
   const navigate = useNavigate();
-  const repos = useRepos();
+  const { repos } = useRepos();
   const { pathname } = useLocation();
-
-  // the store boots with repo=null; adopt the first registered repo once the
-  // list arrives (or re-adopt if the stored name is no longer registered)
-  useEffect(() => {
-    if (repos.length > 0 && (repo === null || !repos.includes(repo))) {
-      setRepo(repos[0]);
-    }
-  }, [repos, repo, setRepo]);
-
-  // `/c/:id` and `/n/:id` are siblings of `/graph`, not children, so no single
-  // NavLink `to`/`end` combination can cover all three: `end` only tightens
-  // matching, it can never broaden it across sibling routes. The graph section
-  // is therefore unioned by hand and the render-prop's own `isActive` ignored.
-  // Routes whose URL embeds an id belonging to one specific repo.
-  const idScopedRoute =
-    pathname.startsWith("/c/") || pathname.startsWith("/n/");
-  const graphActive = pathname === "/graph" || idScopedRoute;
+  // The URL is the source of truth for which repo is selected. On `/` and
+  // legacy paths (one redirect frame) there is no uuid yet; fall back to the
+  // first repo so the bar's links are still real links.
+  const uuid = useRepoUuid() ?? repos[0]?.uuid;
 
   return (
     <header className={styles.topBar}>
       <button
         type="button"
         className={styles.title}
-        onClick={() => navigate("/graph")}
+        onClick={() => navigate(uuid ? repoPath(uuid) : "/")}
       >
         <GraphMark className={styles.mark} />
         Cartograph
       </button>
-      <PageTabs label="sections" className={styles.tabs}>
-        <NavLink to="/graph" className={styles.tabLink}>
-          {() => <PageTab label="graph" active={graphActive} />}
-        </NavLink>
-        {/* Unlike the graph section above, /kb's sub-pages (/kb/review,
-            /kb/new, /kb/:id/edit) are real CHILDREN of /kb, so a non-`end`
-            NavLink matches them all and isActive can be used directly. Don't
-            hand-union this one. */}
-        <NavLink to="/kb" className={styles.tabLink}>
-          {({ isActive }) => <PageTab label="kb" active={isActive} />}
-        </NavLink>
-        <NavLink to="/board" className={styles.tabLink}>
-          {({ isActive }) => <PageTab label="board" active={isActive} />}
-        </NavLink>
-      </PageTabs>
-      <div className={styles.repoSelect}>
-        repo
-        <Select
-          value={repo ?? ""}
-          onValueChange={(value) => {
-            setRepo(value || null);
-            // Stay where you are. Only the routes carrying a repo-specific id
-            // have to be left behind — a community or node id from the old repo
-            // would 404 against the new one. `/graph` and `/board` both scope
-            // themselves by the store's repo, so they just refetch in place.
-            if (idScopedRoute) navigate("/graph");
-          }}
-        >
-          <SelectTrigger aria-label="repo">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {repos.map((name) => (
-              <SelectItem key={name} value={name}>
-                {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {uuid && (
+        <>
+          <PageTabs label="sections" className={styles.tabs}>
+            {/* `end`: the dashboard is the index of /repo/:uuid, so without it
+                this tab would be active under every child route. */}
+            <NavLink to={repoPath(uuid)} end className={styles.tabLink}>
+              {({ isActive }) => <PageTab label="usage" active={isActive} />}
+            </NavLink>
+            {/* `/c/:id` and `/n/:id` are siblings of `/graph`, not children, so
+                no single NavLink `to`/`end` combination can cover all three:
+                `end` only tightens matching, it can never broaden it across
+                sibling routes. The graph section is therefore unioned by hand
+                (routes.ts isGraphRoute) and the render-prop's own isActive
+                ignored. */}
+            <NavLink to={graphPath(uuid)} className={styles.tabLink}>
+              {() => <PageTab label="graph" active={isGraphRoute(pathname)} />}
+            </NavLink>
+            {/* Unlike the graph section above, /kb's sub-pages (/kb/review,
+                /kb/new, /kb/:id/edit) are real CHILDREN of /kb, so a non-`end`
+                NavLink matches them all and isActive can be used directly.
+                Don't hand-union this one. */}
+            <NavLink to={kbPath(uuid)} className={styles.tabLink}>
+              {({ isActive }) => <PageTab label="kb" active={isActive} />}
+            </NavLink>
+            <NavLink to={boardPath(uuid)} className={styles.tabLink}>
+              {({ isActive }) => <PageTab label="board" active={isActive} />}
+            </NavLink>
+          </PageTabs>
+          <div className={styles.repoSelect}>
+            repo
+            {/* Switching repos is a navigation, not a store write: RepoScope
+                owns the store. A push (not replace) so Back returns to the
+                previous repo. The search string is dropped on purpose — a
+                ?sel= names an entry of the old repo. */}
+            <Select
+              value={uuid}
+              onValueChange={(next) => navigate(rescopePath(pathname, next))}
+            >
+              <SelectTrigger aria-label="repo">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {repos.map((r) => (
+                  <SelectItem key={r.uuid} value={r.uuid}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
     </header>
   );
 }

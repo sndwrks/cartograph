@@ -129,7 +129,12 @@ async def _ingest(
     nodes_added = nodes_deleted = edges_added = 0
     for extraction in changed_extractions:
         added, contains, stale = await _load_file(
-            session, repo.id, extraction, file_hashes[extraction.path], locations
+            session,
+            repo.id,
+            extraction,
+            file_hashes[extraction.path],
+            locations,
+            size_bytes=len(sources[extraction.path]),
         )
         nodes_added += added
         nodes_deleted += stale
@@ -201,6 +206,7 @@ async def _load_file(
     extraction: FileExtraction,
     file_hash: str,
     locations: dict[tuple[str, str], str | None],
+    size_bytes: int | None = None,
 ) -> tuple[int, int, int]:
     """Upsert the file node, symbol nodes, and contains edges, then prune
     symbols the extraction no longer produces. Upsert-then-prune (rather than
@@ -217,6 +223,9 @@ async def _load_file(
             "start_line": None,
             "end_line": None,
             "content_hash": file_hash,
+            # only the file row carries a size; symbol rows get None so the
+            # multi-VALUES insert keeps one column set across rows
+            "size_bytes": size_bytes,
         }
     ]
     for sym in extraction.symbols:
@@ -241,6 +250,7 @@ async def _load_file(
                 "start_line": sym.start_line,
                 "end_line": sym.end_line,
                 "content_hash": sym.content_hash,
+                "size_bytes": None,
             }
         )
     ids, inserted = await q.upsert_nodes(session, rows)

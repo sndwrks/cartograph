@@ -6,6 +6,8 @@ import { VisuallyHidden } from "radix-ui";
 import { searchCode } from "../api/client";
 import type { NodeKind } from "../api/types";
 import { useDebounced } from "../hooks/useDebounced";
+import { useRepoUuid } from "../hooks/useRepoUuid";
+import { nodePath } from "../routes";
 import { useAppStore } from "../store";
 import { cx, Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui";
 import KindBadge from "./KindBadge";
@@ -30,6 +32,7 @@ export default function SearchPalette() {
   const paletteOpen = useAppStore((state) => state.paletteOpen);
   const setPaletteOpen = useAppStore((state) => state.setPaletteOpen);
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
 
   const debouncedQuery = useDebounced(input, 200);
   const kindsParam = kinds.size > 0 ? [...kinds].join(",") : undefined;
@@ -77,7 +80,7 @@ export default function SearchPalette() {
     if (!result) return;
     setSelectedNodeId(result.node.id);
     setPaletteOpen(false);
-    navigate(`/n/${result.node.id}`);
+    navigate(nodePath(uuid, result.node.id));
   };
 
   return (

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import datetime
 import enum
+import uuid as _uuid
 from typing import Optional
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     ARRAY,
     BigInteger,
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -15,6 +17,7 @@ from sqlalchemy import (
     Integer,
     Text,
     UniqueConstraint,
+    Uuid,
     func,
     text,
 )
@@ -56,6 +59,9 @@ class Repository(Base):
     __tablename__ = "repositories"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # public identifier for URLs (`/repo/<uuid>/...`): stable across renames,
+    # unlike `name`, and reveals nothing about insertion order, unlike `id`
+    uuid: Mapped[_uuid.UUID] = mapped_column(Uuid, server_default=text("gen_random_uuid()"))
     name: Mapped[str] = mapped_column(Text, unique=True)
     root_path: Mapped[str] = mapped_column(Text)
     default_branch: Mapped[str] = mapped_column(Text, default="main")
@@ -70,6 +76,9 @@ class Repository(Base):
     )
 
     nodes: Mapped[list[Node]] = relationship(back_populates="repository")
+
+    # a unique INDEX (not constraint) so the metadata matches the migration
+    __table_args__ = (Index("ix_repositories_uuid", "uuid", unique=True),)
 
 
 class Node(Base):
@@ -89,6 +98,9 @@ class Node(Base):
     start_line: Mapped[Optional[int]] = mapped_column(Integer)
     end_line: Mapped[Optional[int]] = mapped_column(Integer)
     content_hash: Mapped[Optional[str]] = mapped_column(Text)  # incremental re-ingest
+    # on-disk size, file nodes only (NULL for symbols and for files ingested
+    # before the column existed) — the usage baseline's counterfactual input
+    size_bytes: Mapped[Optional[int]] = mapped_column(Integer)
     summary: Mapped[Optional[str]] = mapped_column(Text)       # tier 3 output
     summary_source_hash: Mapped[Optional[str]] = mapped_column(Text)  # hash summary was made from
     embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(EMBED_DIM))
@@ -122,6 +134,10 @@ class Node(Base):
               postgresql_using="hnsw",
               postgresql_ops={"embedding": "vector_cosine_ops"}),
         Index("ix_nodes_pagerank", text("pagerank DESC")),
+        Index(
+            "ix_nodes_file_path_size", "repository_id", "file_path",
+            postgresql_where=text("kind = 'file'"),
+        ),
     )
 
 
@@ -351,3 +367,50 @@ class IngestRun(Base):
     finished_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(timezone=True))
     stats: Mapped[Optional[dict]] = mapped_column(JSONB)  # per-phase timings, node/edge deltas
     error: Mapped[Optional[str]] = mapped_column(Text)
+
+
+class ToolCall(Base):
+    """One MCP `tools/call`, recorded by `mcp_server.usage.UsageMiddleware`.
+
+    Sizes are bytes, never tokens: the dashboard derives token estimates at
+    read time from `USAGE_CHARS_PER_TOKEN`, so retuning the ratio never means
+    rewriting rows. `response_bytes` is the wire text the agent received.
+    `baseline_bytes` is the modelled counterfactual — the distinct source
+    files an agent would otherwise have opened — and is NULL, not 0, for
+    tools with no file counterfactual (knowledge base, board); a 0 means the
+    call genuinely saved nothing (e.g. an empty search).
+    """
+
+    __tablename__ = "tool_calls"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tool: Mapped[str] = mapped_column(Text, index=True)
+    # NULL = unscoped: the tool took no `repo` and the result resolved to none.
+    # CASCADE like every other per-repo table: SET NULL would turn a deleted
+    # repository's history into "unscoped" rows that every other repository's
+    # dashboard then counts as its own.
+    repository_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("repositories.id", ondelete="CASCADE")
+    )
+    repo_arg: Mapped[Optional[str]] = mapped_column(Text)  # raw `repo` argument
+    agent_name: Mapped[Optional[str]] = mapped_column(Text, index=True)
+    client_session: Mapped[Optional[str]] = mapped_column(Text)  # X-Cartograph-Session
+    arguments: Mapped[dict] = mapped_column(
+        JSONB, server_default=text("'{}'::jsonb"), default=dict
+    )  # long string values truncated, see usage.build_draft
+    request_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    error_kind: Mapped[Optional[str]] = mapped_column(Text)  # tool | exception | protocol
+    error: Mapped[Optional[str]] = mapped_column(Text)
+    response_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    baseline_bytes: Mapped[Optional[int]] = mapped_column(BigInteger)
+    baseline_files: Mapped[Optional[int]] = mapped_column(Integer)
+    result_meta: Mapped[Optional[dict]] = mapped_column(JSONB)
+
+    __table_args__ = (
+        Index("ix_tool_calls_repo_started", "repository_id", "started_at"),
+    )

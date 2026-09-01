@@ -15,6 +15,8 @@ import {
   toCanvasLink,
   toCanvasNode,
 } from "../graphStyle";
+import { useRepoUuid } from "../hooks/useRepoUuid";
+import { communityPath, graphPath } from "../routes";
 import { useAppStore } from "../store";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui";
 import { useOverviewQuery } from "./Overview";
@@ -36,6 +38,7 @@ const ANY_CONFIDENCE_VALUE = "any";
 export default function EgoView() {
   const params = useParams();
   const nodeId = Number(params.nodeId);
+  const uuid = useRepoUuid() ?? "";
   const repo = useAppStore((state) => state.repo);
   const hopDepth = useAppStore((state) => state.hopDepth);
   const setHopDepth = useAppStore((state) => state.setHopDepth);
@@ -70,14 +73,14 @@ export default function EgoView() {
   }, [query.data, nodeId]);
 
   const center = query.data?.nodes.find((node) => node.id === nodeId);
-  const crumbs: Crumb[] = [{ label: "Overview", to: "/graph" }];
+  const crumbs: Crumb[] = [{ label: "Overview", to: graphPath(uuid) }];
   if (center?.community_id != null) {
     const community = overview.data?.communities.find(
       (c) => c.id === center.community_id,
     );
     crumbs.push({
       label: community?.label ?? `community #${center.community_id}`,
-      to: `/c/${center.community_id}`,
+      to: communityPath(uuid, center.community_id),
     });
   }
   crumbs.push({ label: center?.name ?? `node #${nodeId}` });

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import { archiveKbEntry, deleteKbEntry } from "../../api/client";
 import type { KbEntryOut } from "../../api/types";
+import { useRepoUuid } from "../../hooks/useRepoUuid";
+import { kbEditPath, kbPath } from "../../routes";
 import {
   Badge,
   Button,
@@ -19,6 +21,7 @@ import styles from "./KbEntryDetail.module.css";
 
 export default function KbEntryDetail({ entry }: { entry: KbEntryOut | null }) {
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
   const queryClient = useQueryClient();
 
   // Every KB key is prefixed ["kb", …], so one invalidate covers the list, the
@@ -29,7 +32,7 @@ export default function KbEntryDetail({ entry }: { entry: KbEntryOut | null }) {
     mutationFn: deleteKbEntry,
     onSuccess: () => {
       invalidate();
-      navigate("/kb");
+      navigate(kbPath(uuid));
     },
   });
 
@@ -58,7 +61,7 @@ export default function KbEntryDetail({ entry }: { entry: KbEntryOut | null }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem onSelect={() => navigate(`/kb/${entry.id}/edit`)}>
+              <DropdownMenuItem onSelect={() => navigate(kbEditPath(uuid, entry.id))}>
                 Edit
               </DropdownMenuItem>
               {/* Archiving is the only way back from a published entry, and until

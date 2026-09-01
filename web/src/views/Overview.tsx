@@ -7,6 +7,8 @@ import GraphCanvas, {
   type CanvasLink,
   type CanvasNode,
 } from "../components/GraphCanvas";
+import { useRepoUuid } from "../hooks/useRepoUuid";
+import { communityPath } from "../routes";
 import { useAppStore } from "../store";
 import { COMMUNITY_COLOR, EDGE_COLOR } from "../theme";
 import styles from "./Overview.module.css";
@@ -31,6 +33,7 @@ export function useOverviewQuery(repo: string | null) {
 export default function Overview() {
   const repo = useAppStore((state) => state.repo);
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
   const query = useOverviewQuery(repo);
 
   const graph = useMemo(() => {
@@ -92,7 +95,7 @@ export default function Overview() {
     <GraphCanvas
       nodes={graph.nodes}
       links={graph.links}
-      onNodeClick={(node) => navigate(`/c/${node.id}`)}
+      onNodeClick={(node) => navigate(communityPath(uuid, Number(node.id)))}
     />
   );
 }

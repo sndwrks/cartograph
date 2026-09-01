@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { ApiError, fetchKbEntries, publishKbEntry, rejectKbEntry } from "../api/client";
 import ProposalCard from "../components/kb/ProposalCard";
 import type { KbEntryOut } from "../api/types";
+import { useRepoUuid } from "../hooks/useRepoUuid";
+import { kbPath } from "../routes";
 import { useAppStore } from "../store";
 import { Button } from "../ui";
 import styles from "./KbReviewView.module.css";
@@ -37,6 +39,7 @@ function findIncumbent(live: KbEntryOut[], proposal: KbEntryOut): KbEntryOut | n
 export default function KbReviewView() {
   const repo = useAppStore((state) => state.repo);
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
   const queryClient = useQueryClient();
   const [errors, setErrors] = useState<Record<number, string>>({});
 
@@ -98,7 +101,7 @@ export default function KbReviewView() {
     <div className={styles.review}>
       <div className={styles.header}>
         <h1 className={styles.title}>Proposals</h1>
-        <Button variant="ghost" onClick={() => navigate("/kb")}>
+        <Button variant="ghost" onClick={() => navigate(kbPath(uuid))}>
           Back to knowledge base
         </Button>
       </div>

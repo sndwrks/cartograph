@@ -110,11 +110,9 @@ async def resolve_node_by_name(
     return matches[0]
 
 
-async def repositories(session: AsyncSession) -> list[str]:
-    """Registered repository names, alphabetical."""
-    return list(
-        (await session.scalars(select(Repository.name).order_by(Repository.name))).all()
-    )
+async def repositories(session: AsyncSession) -> list[Repository]:
+    """Registered repositories, alphabetical by name."""
+    return list((await session.scalars(select(Repository).order_by(Repository.name))).all())
 
 
 async def overview(session: AsyncSession, repo_name: str) -> dict | None:

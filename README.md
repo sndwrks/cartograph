@@ -18,7 +18,10 @@ AI assistants query it through an MCP server backed by the same query layer.
 ```
 
 - API: http://localhost:8000/api/v1/health
-- Web: http://localhost:5173 (nginx, proxies `/api` to the API)
+- Web: http://localhost:5173 (nginx, proxies `/api` to the API). Every page
+  is scoped to one repository by URL — `/repo/<uuid>` is that repo's usage
+  dashboard, `/repo/<uuid>/graph` its graph, and `/` forwards to the first
+  registered repo; `GET /api/v1/repos` lists the uuids.
 - MCP: http://localhost:8765
 - The database publishes **no host port** in prod mode; all access goes through
   the API or MCP. Ad-hoc SQL: `docker compose exec db psql -U cartograph`.
@@ -154,7 +157,14 @@ CI (`.github/workflows/ci.yml`) runs these as two gated jobs on every PR to
 
 CI sets no API keys on purpose: enrichment tests inject fakes, and a real
 `VOYAGE_API_KEY` would send `kb_lookup`'s tier-3 vector path to the live API,
-which swallows its own failures and so would bill silently.
+which swallows its own failures and so would bill silently. Locally the same
+applies in reverse: `Settings` reads the repo-root `.env`, so a checkout with a
+real key makes the search tests that expect *degraded* mode fail. Blank it for
+the run:
+
+```sh
+VOYAGE_API_KEY= uv run pytest -m integration
+```
 
 ## Ingesting a repository
 
@@ -433,8 +443,8 @@ using the MCP server.
 ## Connecting Claude Code to the MCP server
 
 The `mcp` service exposes the graph's query tools (`search_code`, `get_node`,
-`get_neighbors`, `impact_of`, `kb_lookup`, `post_message`, `read_board`) over
-streamable HTTP on port 8765.
+`get_neighbors`, `impact_of`, `kb_lookup`, `kb_get`, `kb_propose`,
+`post_message`, `read_board`) over streamable HTTP on port 8765.
 
 ### The bearer token
 
@@ -510,6 +520,88 @@ house rules from this repo's [`CLAUDE.md`](CLAUDE.md) — `kb_lookup` before
 guessing at acronyms, the `resolved > llm_inferred > name_match` trust ordering,
 `read_board` before editing a symbol, `impact_of` before touching high fan-in
 code. None of that travels with the MCP connection.
+
+## Is it actually helping? The usage dashboard
+
+The SPA's homepage (`/repo/<uuid>`, the **usage** tab) answers "what is the
+agent getting out of this server?" from a `tool_calls` row the `mcp` service
+writes for every `tools/call`: tool, repository, agent, duration, outcome, the
+bytes of the response the agent actually received, and a modelled **baseline**
+— the size of the distinct source files an agent would plausibly have opened
+to get the same answer without the tool. Token figures on the dashboard are
+**estimates** (`bytes ÷ USAGE_CHARS_PER_TOKEN`, default 4) derived at read
+time; rows store bytes, so retuning the ratio never rewrites history. The
+baseline is deliberately conservative and its rules are documented at the top
+of `backend/src/cartograph/mcp_server/baseline.py`: `search_code` counts the
+files its results live in, `get_node` the node's own file plus its callers'
+files, `get_neighbors`/`impact_of` the files of the returned nodes, and the
+knowledge-base and board tools have no file counterfactual at all (they are
+excluded from the savings ratio rather than counted as zero). Per-file bytes
+are capped at `USAGE_BASELINE_FILE_CAP_BYTES` (80 KB ≈ one default `Read`
+window) because an agent reads a window, not a whole file.
+
+Three operational notes:
+
+- **The baseline needs file sizes**, which ingest only started storing with
+  this feature (`nodes.size_bytes`). Repositories ingested earlier show
+  `baseline_missing_files` in each call's `result_meta` until a full re-ingest
+  (`python -m cartograph.ingest run --repo <name> --full`) fills the column in.
+  A call that names no `repo` gets a baseline only when its files resolve to
+  exactly one repository; otherwise `result_meta.baseline_skipped` says why.
+- **Recording never touches the request path.** The middleware enqueues; one
+  worker task per process parses and writes. A missing table (the `mcp`
+  service came up before the `api` service migrated) logs one warning a
+  minute and the agent still gets its result; `docker-compose.yml` has `mcp`
+  wait for `api`'s healthcheck (which passes only after `alembic upgrade
+  head`) but not require it. `USAGE_RECORDING=false` switches recording off;
+  `USAGE_QUEUE_MAX` bounds the backlog (excess rows are dropped, not queued
+  forever); `USAGE_RETENTION_DAYS` (default 90, 0 = keep everything) has the
+  worker prune old rows hourly so the dashboard's aggregates stay bounded.
+- **Attribution is opt-in.** The transport is stateless, so only
+  `post_message`/`kb_propose` carry an `agent_name`. Two request headers fill
+  the gap for every tool: `X-Cartograph-Agent` names the agent and
+  `X-Cartograph-Session` tags a session (see below). Add them to the
+  `headers` block of the `.mcp.json` entry.
+
+The REST side is `GET /api/v1/usage/summary?repo=<name>&window=24h|7d|30d|all`
+(totals, per-tool, per-bucket, per-agent) and `GET /api/v1/usage/calls` (recent
+calls with arguments and `result_meta`, bounded to `window=`, default 30d).
+Calls that named no repository count toward every repository's view and are
+reported as `unscoped_calls`. Like the rest of the API these endpoints carry no
+authentication — they are meant for the SPA on a trusted network, and a tool
+that raises stores only the first line of its exception (the full text goes
+to the `mcp` service log).
+
+### Measuring for real: an A/B on your own tasks
+
+The dashboard's savings are a counterfactual model. The ground truth is the
+same task run with and without the server registered, measured from what Claude
+Code writes to `~/.claude/projects/<project-dir>/<session>.jsonl` — every
+assistant line carries `message.usage`. `scripts/session_tokens.py` (stdlib
+only) turns those transcripts into a per-session table — turns, context tokens
+processed (input + cache creation + cache read: the number tool-output
+verbosity actually drives), output tokens, `mcp__cartograph__*` calls vs
+`Read`/`Grep`/`Glob`/`Bash`, wall time — with per-arm means when sessions are
+labelled:
+
+```sh
+# arm A: the server registered as usual (tag it server-side too, so
+# tool_calls.client_session joins these rows to the transcript)
+#   "headers": { "Authorization": "...", "X-Cartograph-Session": "with-mcp" }
+# arm B: no MCP servers at all
+claude --strict-mcp-config --mcp-config '{}'
+
+scripts/session_tokens.py ~/.claude/projects/-Users-me--proj-consumer \
+  --since 2026-08-31T09:00 \
+  --label-file abc123.jsonl:with-mcp --label-file def456.jsonl:without-mcp
+```
+
+Pick three to five realistic tasks ("where is X validated and who calls it",
+"what breaks if I change Y"), run at least three fresh sessions per arm with the
+same prompt, model and permission mode, and judge correctness by hand. Comparing
+the measured context-token gap against the dashboard's estimated savings for
+the same sessions is what calibrates `USAGE_CHARS_PER_TOKEN` — and tells you
+whether bytes or turn count is the better predictor for your codebase.
 
 ## Specs
 

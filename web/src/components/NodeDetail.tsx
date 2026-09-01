@@ -9,6 +9,8 @@ import KbTypeBadge from "./kb/KbTypeBadge";
 import KindBadge from "./KindBadge";
 import ThreadList from "./ThreadList";
 import { Close } from "./icons";
+import { useRepoUuid } from "../hooks/useRepoUuid";
+import { communityPath, kbPath, nodePath } from "../routes";
 import { useAppStore } from "../store";
 import { useOverviewQuery } from "../views/Overview";
 import { Button } from "../ui";
@@ -51,6 +53,7 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
   const setSelectedNodeId = useAppStore((state) => state.setSelectedNodeId);
   const requestFocus = useAppStore((state) => state.requestFocus);
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
   const overview = useOverviewQuery(repo);
 
   const detail = useQuery({
@@ -188,7 +191,7 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
               <button
                 type="button"
                 className={styles.linkButton}
-                onClick={() => navigate(`/c/${node.community_id}`)}
+                onClick={() => navigate(communityPath(uuid, node.community_id as number))}
               >
                 {community?.label ?? `community #${node.community_id}`}
               </button>
@@ -218,7 +221,7 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
             {relatedKb.data.terms.map((term) => (
               <li key={term.id} title={term.definition}>
                 <KbTypeBadge type={term.type} />{" "}
-                <Link to={`/kb?sel=${term.id}`}>
+                <Link to={kbPath(uuid, { sel: term.id })}>
                   <strong>{term.term}</strong>
                 </Link>
                 <span className="muted"> — {term.definition}</span>
@@ -241,7 +244,7 @@ export default function NodeDetail({ nodeId }: { nodeId: number }) {
 
       <Button
         variant="primary"
-        onClick={() => navigate(`/n/${node.id}`)}
+        onClick={() => navigate(nodePath(uuid, node.id))}
         className={styles.expandButton}
       >
         Expand ego graph

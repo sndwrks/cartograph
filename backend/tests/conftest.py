@@ -40,7 +40,7 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 # `at_initial`/`migration_db` belong to tests/kb/test_migration.py, which builds
 # its own throwaway database rather than using the shared engine.
 DB_FIXTURES = frozenset(
-    {"test_engine", "session", "seeded", "migration_db", "at_initial"}
+    {"test_engine", "test_sessionmaker", "session", "seeded", "migration_db", "at_initial"}
 )
 
 
@@ -114,16 +114,24 @@ async def test_engine() -> AsyncIterator[AsyncEngine]:
 
 
 @pytest.fixture
-async def session(test_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
-    """A session inside an outer transaction rolled back after each test."""
+async def test_sessionmaker(test_engine: AsyncEngine) -> AsyncIterator[async_sessionmaker]:
+    """A sessionmaker bound to one connection inside an outer transaction
+    that is rolled back after each test. Code that opens its own sessions
+    (the MCP usage middleware) gets this injected so its writes land in — and
+    vanish with — the same transaction as the test's `session`."""
     async with test_engine.connect() as conn:
         trans = await conn.begin()
-        maker = async_sessionmaker(
+        yield async_sessionmaker(
             conn, expire_on_commit=False, join_transaction_mode="create_savepoint"
         )
-        async with maker() as sess:
-            yield sess
         await trans.rollback()
+
+
+@pytest.fixture
+async def session(test_sessionmaker: async_sessionmaker) -> AsyncIterator[AsyncSession]:
+    """A session inside an outer transaction rolled back after each test."""
+    async with test_sessionmaker() as sess:
+        yield sess
 
 
 @pytest.fixture

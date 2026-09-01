@@ -161,7 +161,9 @@ async def test_validation_errors(client, seeded):
     ).status_code == 422
 
 
-async def test_repos_lists_registered_names(client, seeded, session):
+async def test_repos_lists_registered_repositories(client, seeded, session):
+    import uuid
+
     from cartograph.models import Repository
 
     session.add(Repository(name="another", root_path="/repos/another"))
@@ -169,7 +171,12 @@ async def test_repos_lists_registered_names(client, seeded, session):
 
     r = await client.get("/api/v1/repos")
     assert r.status_code == 200
-    assert r.json() == {"repos": ["another", "seeded"]}
+    repos = r.json()["repos"]
+    assert [x["name"] for x in repos] == ["another", "seeded"]
+    assert all(set(x) == {"id", "uuid", "name"} for x in repos)
+    uuids = {uuid.UUID(x["uuid"]) for x in repos}  # parses, and distinct
+    assert len(uuids) == 2
+    assert next(x for x in repos if x["name"] == "seeded")["id"] == seeded.repo.id
 
 
 async def test_repos_empty(client):

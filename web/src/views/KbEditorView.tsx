@@ -12,7 +12,9 @@ import {
   updateKbEntry,
   type KbEntryInput,
 } from "../api/client";
+import { useRepoUuid } from "../hooks/useRepoUuid";
 import { useRepos } from "../hooks/useRepos";
+import { kbPath } from "../routes";
 import { useAppStore } from "../store";
 import {
   Button,
@@ -54,9 +56,10 @@ export default function KbEditorView() {
   const { entryId } = useParams();
   const editing = entryId !== undefined;
   const navigate = useNavigate();
+  const uuid = useRepoUuid() ?? "";
   const queryClient = useQueryClient();
   const repo = useAppStore((state) => state.repo);
-  const repos = useRepos();
+  const { repos } = useRepos();
 
   const [form, setForm] = useState<FormState>(EMPTY);
   const [payloadError, setPayloadError] = useState<string | null>(null);
@@ -150,7 +153,7 @@ export default function KbEditorView() {
     },
     onSuccess: (entry) => {
       queryClient.invalidateQueries({ queryKey: ["kb"] });
-      navigate(`/kb?sel=${entry.id}`);
+      navigate(kbPath(uuid, { sel: entry.id }));
     },
     onError: (mutationError) => {
       if (mutationError instanceof ApiError) {
@@ -306,9 +309,10 @@ export default function KbEditorView() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={GLOBAL}>global (every repository)</SelectItem>
-              {repos.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
+              {/* value stays the NAME: KbEntryInput.repository is a name */}
+              {repos.map((r) => (
+                <SelectItem key={r.uuid} value={r.name}>
+                  {r.name}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -1,0 +1,90 @@
+.page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  /* No box border: the page fills the workspace edge to edge, so a top
+     border doubles the TopBar's bottom border. .header's own border-bottom
+     is the real divider. */
+  background: var(--color-surface);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border);
+  background: var(--color-surface-raised);
+}
+
+.titleGroup {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.repoName {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.body {
+  overflow: auto;
+  min-height: 0;
+  padding: var(--space-4);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+
+.sideBySide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+@media (max-width: 960px) { /* --bp-md */
+  .sideBySide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.emptyPre {
+  background: var(--color-surface-sunken);
+  border: var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-3) 0 0;
+  text-align: left;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.emptyActions {
+  margin-top: var(--space-3);
+}

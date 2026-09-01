@@ -179,3 +179,109 @@ export interface RelatedKbTerm {
   category: string | null;
   score: number;
 }
+
+// --- repositories ---
+
+export interface RepoOut {
+  id: number;
+  /** Stable public identifier — the URL segment in /repo/<uuid>/… */
+  uuid: string;
+  /** The name every other endpoint's `repo=` parameter speaks. */
+  name: string;
+}
+
+// --- ingest runs (slice 08) ---
+
+export interface IngestRunOut {
+  id: number;
+  repository: string;
+  trigger: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  stats: Record<string, unknown> | null;
+  // omitted by the list endpoint; GET /ingest/runs/{id} includes it
+  error?: string | null;
+}
+
+// --- MCP tool usage (usage dashboard) ---
+
+export type UsageWindow = "24h" | "7d" | "30d" | "all";
+
+export interface UsageTotals {
+  calls: number;
+  errors: number;
+  /** calls that named no repo — they show under every repo's dashboard */
+  unscoped_calls: number;
+  agents: number;
+  response_bytes: number;
+  request_bytes: number;
+  /** calls that have a file baseline (graph tools); the ratio is over these */
+  baseline_calls: number;
+  baseline_bytes: number;
+  /** response bytes of the baseline calls only — like for like */
+  baseline_response_bytes: number;
+  baseline_files: number;
+  est_tokens_returned: number;
+  est_tokens_baseline: number;
+  est_tokens_saved: number;
+  /** saved ÷ baseline over baseline calls; null when there are none */
+  savings_ratio: number | null;
+}
+
+export interface UsageToolRow {
+  tool: string;
+  calls: number;
+  errors: number;
+  avg_duration_ms: number;
+  p50_duration_ms: number;
+  response_bytes: number;
+  baseline_bytes: number;
+}
+
+export interface UsageBucketRow {
+  start: string;
+  calls: number;
+  errors: number;
+  response_bytes: number;
+  baseline_bytes: number;
+  /** response bytes over the calls that have a baseline — pair with baseline_bytes */
+  baseline_response_bytes: number;
+}
+
+export interface UsageAgentRow {
+  name: string;
+  calls: number;
+  errors: number;
+  last_call: string;
+}
+
+export interface UsageSummaryResponse {
+  window: UsageWindow;
+  bucket: "hour" | "day";
+  chars_per_token: number;
+  totals: UsageTotals;
+  by_tool: UsageToolRow[];
+  buckets: UsageBucketRow[];
+  agents: UsageAgentRow[];
+}
+
+export interface UsageCallOut {
+  id: number;
+  tool: string;
+  repository: string | null;
+  repo_arg: string | null;
+  agent_name: string | null;
+  client_session: string | null;
+  arguments: Record<string, unknown>;
+  request_bytes: number;
+  started_at: string;
+  duration_ms: number;
+  ok: boolean;
+  error_kind: string | null;
+  error: string | null;
+  response_bytes: number;
+  baseline_bytes: number | null;
+  baseline_files: number | null;
+  result_meta: Record<string, unknown> | null;
+}
