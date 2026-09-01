@@ -224,8 +224,11 @@ class UsageMiddleware:
         self._settings = settings or get_settings()
         self._queue: asyncio.Queue[_Job] | None = None
         self._worker: asyncio.Task | None = None
-        self._last_warning = 0.0
-        self._last_prune = 0.0
+        # -inf, not 0.0: time.monotonic() is seconds since boot on Linux, so
+        # on a freshly booted host (CI runners) `now - 0.0` can be under the
+        # throttle window and the *first* warning/prune would be skipped
+        self._last_warning = float("-inf")
+        self._last_prune = float("-inf")
         self.dropped = 0  # rows lost to a full queue, for tests and logs
 
     # --- request path -------------------------------------------------------

@@ -142,6 +142,17 @@ async def test_recording_failure_never_propagates(caplog):
     await mw.aclose()
 
 
+async def test_first_warning_not_throttled_on_young_monotonic_clock(caplog, monkeypatch):
+    # time.monotonic() is uptime on Linux; a fresh CI VM can report < 60s, and
+    # a throttle seeded with 0.0 would then swallow the very first warning
+    monkeypatch.setattr("cartograph.mcp_server.usage.time.monotonic", lambda: 12.0)
+    mw = UsageMiddleware(None, Settings())
+    with caplog.at_level("WARNING", logger="cartograph.mcp_server.usage"):
+        mw._warn_throttled(RuntimeError("boom"))
+        mw._warn_throttled(RuntimeError("boom"))
+    assert sum("usage recording failed" in r.message for r in caplog.records if r.levelname == "WARNING") == 1
+
+
 async def test_full_queue_drops_rows_instead_of_blocking():
     processed = []
 
