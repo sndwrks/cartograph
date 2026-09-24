@@ -34,9 +34,22 @@ def _line(node: Node) -> int:
 
 
 def _dotted_text(source: bytes, node: Node) -> str | None:
-    """Flatten an identifier/attribute chain to dotted text; None for anything else."""
+    """Flatten an identifier/attribute chain to dotted text; None for anything else.
+
+    A bare `super(...)` call is special-cased to the literal "super": its
+    object is a `call` node, which this function otherwise never descends
+    into, so `super().method()` / `super(Cls, self).method()` would
+    otherwise flatten to None and the ref would be silently dropped before
+    the resolver ever sees it. The resolver treats a "super.<rest>" ref
+    expression as a request to walk the enclosing class's base classes.
+    """
     if node.type == "identifier":
         return _text(source, node)
+    if node.type == "call":
+        fn = node.child_by_field_name("function")
+        if fn is not None and fn.type == "identifier" and _text(source, fn) == "super":
+            return "super"
+        return None
     if node.type == "attribute":
         obj = node.child_by_field_name("object")
         attr = node.child_by_field_name("attribute")

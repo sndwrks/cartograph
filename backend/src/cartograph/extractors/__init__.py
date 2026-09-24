@@ -1,6 +1,6 @@
 """Language extractors and the tier-1 resolver (slices 03/04)."""
 
-from . import python, typescript
+from . import python, rust, typescript
 from .base import (
     Extractor,
     FileExtraction,
@@ -15,6 +15,7 @@ from .resolve import CandidateEdge, resolve
 
 register(python.PythonExtractor())
 register(typescript.TypeScriptExtractor())
+register(rust.RustExtractor())
 
 __all__ = [
     "CandidateEdge",

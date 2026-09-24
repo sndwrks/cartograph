@@ -123,6 +123,108 @@ def _resolve_via_imports(
     return None, False
 
 
+def _class_bases(
+    extractions: Sequence[FileExtraction],
+    symbol_table: dict[str, SymbolRecord],
+) -> dict[str, list[str]]:
+    """class qname -> resolved base-class qnames, in declaration order.
+
+    Sourced from `inherits` refs, resolved through the same import /
+    star-import / same-module-sibling path as rule 3a/3b (never the
+    bare-name fallback) — an external or otherwise-unresolvable base (e.g.
+    `unittest.TestCase`) is simply absent, which is what stops the MRO walk
+    below rather than guessing past it.
+    """
+    bases: dict[str, list[str]] = {}
+    for extraction in extractions:
+        if not extraction.refs:
+            continue
+        import_map = _import_map(extraction)
+        star_targets = _star_targets(extraction)
+        for ref in extraction.refs:
+            if ref.kind != "inherits":
+                continue
+            dst, _ = _resolve_via_imports(
+                ref.target_expr,
+                import_map,
+                star_targets,
+                extraction.module_qname,
+                symbol_table,
+            )
+            sym = symbol_table.get(dst) if dst is not None else None
+            if sym is not None and sym.kind == "class":
+                bases.setdefault(ref.src_qualified_name, []).append(dst)
+    return bases
+
+
+def _mro(cls_qname: str, class_bases: dict[str, list[str]]) -> list[str]:
+    """cls_qname followed by its resolved ancestors, DFS declaration order,
+    deduped and cycle-safe. MRO-ish, not real C3 linearization — good enough
+    for "does some ancestor define this name", which is all callers need."""
+    order: list[str] = []
+    seen: set[str] = set()
+
+    def visit(qname: str) -> None:
+        if qname in seen:
+            return
+        seen.add(qname)
+        order.append(qname)
+        for base in class_bases.get(qname, ()):
+            visit(base)
+
+    visit(cls_qname)
+    return order
+
+
+def _resolve_self_ref(
+    rest: str,
+    cls_qname: str | None,
+    symbol_table: dict[str, SymbolRecord],
+    field_types: dict[tuple[str, str], str],
+    class_bases: dict[str, list[str]],
+) -> str | None:
+    """self./cls./this. resolution: the enclosing class first, then its
+    resolved bases in MRO-ish order (rule 4); failing that, a field access
+    (self.field.method()) through the same MRO order using constructor-
+    tracked field types (rule 4b). None means "drop" — the caller must NOT
+    fall back to a repo-wide bare-name guess: the class is known, so a
+    same-named method on an unrelated class is noise, not evidence.
+    """
+    if cls_qname is None:
+        return None
+    mro = _mro(cls_qname, class_bases)
+    for ancestor in mro:
+        candidate = f"{ancestor}.{rest}"
+        if candidate in symbol_table:
+            return candidate
+    fld, _, chain = rest.partition(".")
+    if not chain:
+        return None
+    for ancestor in mro:
+        field_class = field_types.get((ancestor, fld))
+        if field_class is not None and f"{field_class}.{chain}" in symbol_table:
+            return f"{field_class}.{chain}"
+    return None
+
+
+def _resolve_super_ref(
+    rest: str,
+    cls_qname: str | None,
+    symbol_table: dict[str, SymbolRecord],
+    class_bases: dict[str, list[str]],
+) -> str | None:
+    """super().method(): the enclosing class's resolved bases only (never
+    the class itself), in MRO-ish order. None means "drop", same rationale
+    as _resolve_self_ref."""
+    if cls_qname is None:
+        return None
+    for ancestor in _mro(cls_qname, class_bases)[1:]:
+        candidate = f"{ancestor}.{rest}"
+        if candidate in symbol_table:
+            return candidate
+    return None
+
+
 _CONFLICTED = object()
 
 
@@ -172,6 +274,7 @@ def resolve(
     """
     symbol_table, bare_index = _build_indexes(extractions, extra_symbols)
     field_types = _field_types(extractions, symbol_table)
+    class_bases = _class_bases(extractions, symbol_table)
 
     edges: list[CandidateEdge] = []
     seen: set[tuple[str, str, str, int | None]] = set()
@@ -196,6 +299,15 @@ def resolve(
             rel = _REL_FOR_REF[ref.kind]
             expr = ref.target_expr
 
+            # Rust only: crate::/self::/super::/Self path prefixes are
+            # already resolved to absolute qnames by the extractor (it has
+            # the crate-root/scope context this module doesn't), so a direct
+            # symbol-table hit is tried first. A miss still falls through to
+            # the shared pipeline below — same as any other language.
+            if extraction.language == "rust" and expr in symbol_table:
+                emit(ref.src_qualified_name, expr, rel, "resolved", ref.line)
+                continue
+
             def bare_fallback(name: str) -> bool:
                 if len(name) < _NAME_MATCH_MIN_LEN:
                     return False
@@ -213,38 +325,30 @@ def resolve(
                     emit(ref.src_qualified_name, dst, rel, "name_match", ref.line)
                 return True
 
-            # rule 4: self./cls./this. resolve against the enclosing class first
+            # rule 4: self./cls./this. resolve against the enclosing class,
+            # then its resolved base classes (rule 4 MRO walk), then a
+            # field access through the same MRO (rule 4b). A miss here is
+            # DROPPED, never handed to bare_fallback: the enclosing class is
+            # known, so a same-named method on some unrelated class is noise,
+            # not evidence (see _resolve_self_ref).
             left, _, rest = expr.partition(".")
             if left in ("self", "cls", "this") and rest:
                 cls_qname = _enclosing_class_qname(ref.src_qualified_name, symbol_table)
-                if cls_qname is not None:
-                    if f"{cls_qname}.{rest}" in symbol_table:
-                        emit(
-                            ref.src_qualified_name,
-                            f"{cls_qname}.{rest}",
-                            rel,
-                            "resolved",
-                            ref.line,
-                        )
-                        continue
-                    # rule 4b: this.field.method() via a constructor-assigned
-                    # collaborator (`this.field = new ClassName()`)
-                    fld, _, chain = rest.partition(".")
-                    if chain:
-                        field_class = field_types.get((cls_qname, fld))
-                        if (
-                            field_class is not None
-                            and f"{field_class}.{chain}" in symbol_table
-                        ):
-                            emit(
-                                ref.src_qualified_name,
-                                f"{field_class}.{chain}",
-                                rel,
-                                "resolved",
-                                ref.line,
-                            )
-                            continue
-                bare_fallback(rest.rsplit(".", 1)[-1])
+                dst = _resolve_self_ref(
+                    rest, cls_qname, symbol_table, field_types, class_bases
+                )
+                if dst is not None:
+                    emit(ref.src_qualified_name, dst, rel, "resolved", ref.line)
+                continue
+
+            # rule 4c: super().method() resolves against the enclosing
+            # class's bases only (never the class itself); same drop-not-
+            # guess policy as self/cls/this on a miss.
+            if left == "super" and rest:
+                cls_qname = _enclosing_class_qname(ref.src_qualified_name, symbol_table)
+                dst = _resolve_super_ref(rest, cls_qname, symbol_table, class_bases)
+                if dst is not None:
+                    emit(ref.src_qualified_name, dst, rel, "resolved", ref.line)
                 continue
 
             # rules 3a/3b: imports (with default-export retry), star-imports,
@@ -260,6 +364,29 @@ def resolve(
                 # means an external package, and a bare fallback would only
                 # name_match unrelated same-named locals
                 continue
+
+            # Rust only: `_resolve_via_imports`'s sibling fallback above only
+            # tries the *file-level* module_qname, but Rust nests modules
+            # inline (`mod tests { fn a() { b(); } }` — the common
+            # `#[cfg(test)]` pattern), so a same-module sibling call can sit
+            # several module levels deeper than the file. Walk the caller's
+            # own qname outward, from its nearest enclosing module, retrying
+            # the sibling check at each level before degrading to a bare
+            # (weaker, ambiguity-prone) name_match.
+            if extraction.language == "rust":
+                parts = ref.src_qualified_name.split(".")
+                nested_hit = None
+                for end in range(len(parts) - 1, 0, -1):
+                    scope_qname = ".".join(parts[:end])
+                    sym = symbol_table.get(scope_qname)
+                    if sym is not None and sym.kind == "module":
+                        candidate = f"{scope_qname}.{expr}"
+                        if candidate in symbol_table:
+                            nested_hit = candidate
+                            break
+                if nested_hit is not None:
+                    emit(ref.src_qualified_name, nested_hit, rel, "resolved", ref.line)
+                    continue
 
             # rule 3c: bare-name fallback; rule 3d: no candidates -> drop
             bare_fallback(expr.rsplit(".", 1)[-1])

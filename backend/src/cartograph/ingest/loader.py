@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cartograph.extractors import get_extractor_for, resolve
 from cartograph.extractors.base import FileExtraction, SymbolRecord, hash_content
+from cartograph.extractors.rust_context import RustResolutionContext, discover_rust_context
 from cartograph.extractors.ts_context import TsResolutionContext, discover_ts_context
 from cartograph.models import EdgeConfidence, EdgeRel, NodeKind, Repository
 from cartograph.query import ingest as q
@@ -43,11 +44,21 @@ async def ingest_repo(
 
 
 def _extract(
-    path: str, source: bytes, context: TsResolutionContext | None = None
+    path: str,
+    source: bytes,
+    ts_context: TsResolutionContext | None = None,
+    rust_context: RustResolutionContext | None = None,
 ) -> FileExtraction:
     extractor = get_extractor_for(path)
     if extractor is None:  # walker/CLI filtering should prevent this
         raise ValueError(f"no extractor for {path}")
+    language = getattr(extractor, "language", None)
+    if language == "typescript":
+        context = ts_context
+    elif language == "rust":
+        context = rust_context
+    else:
+        context = None
     return extractor.extract(path, source, context)
 
 
@@ -105,21 +116,27 @@ async def _ingest(
 
     # --- extract ----------------------------------------------------------
     t0 = time.monotonic()
-    # the discovery walk (tsconfig/package.json manifests) only pays off for
-    # TS/JS files; skip it for pure-Python batches and single-file hook runs
+    # the discovery walks (tsconfig/package.json manifests; Cargo.toml crate
+    # roots) only pay off for their own language; skip them for batches that
+    # don't touch it (pure-Python batches, single-file hook runs)
     extract_paths = [*changed, *sorted(dependents)]
-    needs_ts_context = any(
-        getattr(get_extractor_for(p), "language", None) == "typescript"
-        for p in extract_paths
-    )
+    languages_seen = {getattr(get_extractor_for(p), "language", None) for p in extract_paths}
     ts_context = (
         discover_ts_context(root, denied_dirs(repo.exclude_dirs))
-        if needs_ts_context
+        if "typescript" in languages_seen
         else None
     )
-    changed_extractions = [_extract(p, sources[p], ts_context) for p in changed]
+    rust_context = (
+        discover_rust_context(root, denied_dirs(repo.exclude_dirs))
+        if "rust" in languages_seen
+        else None
+    )
+    changed_extractions = [
+        _extract(p, sources[p], ts_context, rust_context) for p in changed
+    ]
     dependent_extractions = [
-        _extract(p, (root / p).read_bytes(), ts_context) for p in sorted(dependents)
+        _extract(p, (root / p).read_bytes(), ts_context, rust_context)
+        for p in sorted(dependents)
     ]
     timings["extract"] = time.monotonic() - t0
 
