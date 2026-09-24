@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -26,6 +27,11 @@ INSTRUCTIONS = (
     "as proven."
 )
 
+# query tools declare readOnlyHint so clients (e.g. claude code plan mode) can
+# run them without an approval prompt; the write tools (kb_propose,
+# post_message) deliberately stay unannotated
+READ_ONLY = ToolAnnotations(readOnlyHint=True)
+
 
 def build_mcp_server(
     sessionmaker=None, usage: UsageMiddleware | None = None
@@ -40,6 +46,7 @@ def build_mcp_server(
     server = MCPServer("cartograph", instructions=INSTRUCTIONS, middleware=[usage])
 
     @server.tool(
+        annotations=READ_ONLY,
         description=(
             "Search code entities by name and meaning. "
             "Use before guessing at symbol locations."
@@ -55,6 +62,7 @@ def build_mcp_server(
             return await tools.search_code(session, query, repo, kinds, limit)
 
     @server.tool(
+        annotations=READ_ONLY,
         description=(
             "Get a code entity by qualified name (bare names resolve when "
             "unique): detail, metrics, and its immediate in/out edges with "
@@ -66,6 +74,7 @@ def build_mcp_server(
             return await tools.get_node(session, qualified_name, repo)
 
     @server.tool(
+        annotations=READ_ONLY,
         description=(
             "Neighborhood of a code entity: nodes and edges within N hops, "
             "optionally filtered by minimum edge confidence "
@@ -84,6 +93,7 @@ def build_mcp_server(
             )
 
     @server.tool(
+        annotations=READ_ONLY,
         description=(
             "What breaks if this changes — callers/importers, transitive. "
             "Depth-annotated blast radius, upstream or downstream."
@@ -96,6 +106,7 @@ def build_mcp_server(
             return await tools.impact_of(session, qualified_name, direction, max_depth)
 
     @server.tool(
+        annotations=READ_ONLY,
         description=(
             "Resolve company acronyms and internal terms. ALWAYS call this "
             "before assuming what an acronym means. Bodies come back "
@@ -109,6 +120,7 @@ def build_mcp_server(
             return await tools.kb_lookup(session, term, repo)
 
     @server.tool(
+        annotations=READ_ONLY,
         description=(
             "Read one knowledge-base entry in full by slug. With only `type` "
             "and no slug, returns that type's index — every slug and title, "
@@ -173,6 +185,7 @@ def build_mcp_server(
             )
 
     @server.tool(
+        annotations=READ_ONLY,
         description=(
             "Read the agent coordination board. Check for existing threads "
             "about a symbol before starting work on it. Without thread_id: "
