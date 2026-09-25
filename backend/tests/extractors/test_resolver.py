@@ -221,6 +221,201 @@ def test_python_self_field_call_resolved():
     assert len(hits) == 1 and hits[0].confidence == "resolved"
 
 
+def test_self_call_inherited_same_module_resolved():
+    # self._run() where _run is defined only on the base class, called from
+    # a subclass method in the same module (the MonitorTestCase/_run shape).
+    source = (
+        b"class Base:\n"
+        b"    def _run(self):\n"
+        b"        return 1\n\n"
+        b"class Sub(Base):\n"
+        b"    def test_x(self):\n"
+        b"        return self._run()\n"
+    )
+    edges = resolve([PythonExtractor().extract("pkg/tests.py", source)])
+    hits = find(
+        edges,
+        src="pkg.tests.Sub.test_x",
+        dst="pkg.tests.Base._run",
+        rel="calls",
+    )
+    assert len(hits) == 1 and hits[0].confidence == "resolved"
+
+
+def test_self_call_inherited_cross_module_resolved():
+    base = b"class Base:\n    def _run(self):\n        return 1\n"
+    sub = (
+        b"from pkg.base import Base\n\n"
+        b"class Sub(Base):\n"
+        b"    def test_x(self):\n"
+        b"        return self._run()\n"
+    )
+    extractor = PythonExtractor()
+    edges = resolve(
+        [
+            extractor.extract("pkg/base.py", base),
+            extractor.extract("pkg/sub.py", sub),
+        ]
+    )
+    hits = find(
+        edges, src="pkg.sub.Sub.test_x", dst="pkg.base.Base._run", rel="calls"
+    )
+    assert len(hits) == 1 and hits[0].confidence == "resolved"
+
+
+def test_self_call_in_closure_inside_method_resolved():
+    # a nested function (closure) inside a test method calling self.x();
+    # lexical `self` should still bind to the enclosing class, and the
+    # method it names may live on a base class (the test_priority_order/
+    # `run` shape).
+    base = b"class Base:\n    def _prime(self):\n        return 1\n"
+    sub = (
+        b"from pkg.base import Base\n\n"
+        b"class Sub(Base):\n"
+        b"    def test_it(self):\n"
+        b"        def run():\n"
+        b"            return self._prime()\n"
+        b"        return run()\n"
+    )
+    extractor = PythonExtractor()
+    edges = resolve(
+        [
+            extractor.extract("pkg/base.py", base),
+            extractor.extract("pkg/sub.py", sub),
+        ]
+    )
+    hits = find(
+        edges,
+        src="pkg.sub.Sub.test_it.run",
+        dst="pkg.base.Base._prime",
+        rel="calls",
+    )
+    assert len(hits) == 1 and hits[0].confidence == "resolved"
+
+
+def test_self_field_method_via_inherited_field_resolved():
+    # self.world = Collaborator() assigned in the base class's setUp; called
+    # as self.world.ingest() from a subclass method (the
+    # SnapshotTestCase/self.world shape).
+    base = (
+        b"class Collaborator:\n"
+        b"    def ingest(self):\n"
+        b"        return 1\n\n"
+        b"class Base:\n"
+        b"    def setUp(self):\n"
+        b"        self.world = Collaborator()\n"
+    )
+    sub = (
+        b"from pkg.base import Base\n\n"
+        b"class Sub(Base):\n"
+        b"    def test_it(self):\n"
+        b"        return self.world.ingest()\n"
+    )
+    extractor = PythonExtractor()
+    edges = resolve(
+        [
+            extractor.extract("pkg/base.py", base),
+            extractor.extract("pkg/sub.py", sub),
+        ]
+    )
+    hits = find(
+        edges,
+        src="pkg.sub.Sub.test_it",
+        dst="pkg.base.Collaborator.ingest",
+        rel="calls",
+    )
+    assert len(hits) == 1 and hits[0].confidence == "resolved"
+
+
+def test_classmethod_cls_call_inherited_resolved():
+    base = (
+        b"class Base:\n"
+        b"    @classmethod\n"
+        b"    def create(cls):\n"
+        b"        return 1\n"
+    )
+    sub = (
+        b"from pkg.base import Base\n\n"
+        b"class Sub(Base):\n"
+        b"    @classmethod\n"
+        b"    def build(cls):\n"
+        b"        return cls.create()\n"
+    )
+    extractor = PythonExtractor()
+    edges = resolve(
+        [
+            extractor.extract("pkg/base.py", base),
+            extractor.extract("pkg/sub.py", sub),
+        ]
+    )
+    hits = find(
+        edges, src="pkg.sub.Sub.build", dst="pkg.base.Base.create", rel="calls"
+    )
+    assert len(hits) == 1 and hits[0].confidence == "resolved"
+
+
+def test_super_call_resolved():
+    base = b"class Base:\n    def save(self):\n        return 1\n"
+    sub = (
+        b"from pkg.base import Base\n\n"
+        b"class Sub(Base):\n"
+        b"    def save(self):\n"
+        b"        return super().save()\n"
+    )
+    extractor = PythonExtractor()
+    edges = resolve(
+        [
+            extractor.extract("pkg/base.py", base),
+            extractor.extract("pkg/sub.py", sub),
+        ]
+    )
+    hits = find(
+        edges, src="pkg.sub.Sub.save", dst="pkg.base.Base.save", rel="calls"
+    )
+    assert len(hits) == 1 and hits[0].confidence == "resolved"
+
+
+def test_unresolvable_self_call_dropped_not_name_matched():
+    # `self._seed()` on a class whose only base is external (unittest) and
+    # which does not define `_seed` itself must be DROPPED, not fanned out
+    # to an unrelated same-named method elsewhere in the repo (`Other._seed`
+    # below is a plausible, cap-eligible, non-generic 5-char name that would
+    # previously have matched via the bare-name fallback).
+    other = b"class Other:\n    def _seed(self):\n        return 1\n"
+    base = (
+        b"import unittest\n\n"
+        b"class Base(unittest.TestCase):\n"
+        b"    def test_it(self):\n"
+        b"        return self._seed()\n"
+    )
+    extractor = PythonExtractor()
+    edges = resolve(
+        [
+            extractor.extract("pkg/other.py", other),
+            extractor.extract("pkg/base.py", base),
+        ]
+    )
+    assert not find(edges, src="pkg.base.Base.test_it")
+
+
+def test_unresolvable_super_call_dropped_not_name_matched():
+    other = b"class Other:\n    def setUp(self):\n        return 1\n"
+    sub = (
+        b"import unittest\n\n"
+        b"class Sub(unittest.TestCase):\n"
+        b"    def setUp(self):\n"
+        b"        super().setUp()\n"
+    )
+    extractor = PythonExtractor()
+    edges = resolve(
+        [
+            extractor.extract("pkg/other.py", other),
+            extractor.extract("pkg/sub.py", sub),
+        ]
+    )
+    assert not find(edges, src="pkg.sub.Sub.setUp")
+
+
 def test_failed_import_ref_dropped():
     definer = _module_extraction(
         "other",

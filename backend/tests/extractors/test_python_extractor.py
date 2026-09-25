@@ -123,6 +123,36 @@ def test_attr_ref_conservative():
     assert [r for r in services.refs if r.kind == "attr_ref"] == []
 
 
+def test_super_call_ref_uses_super_sentinel():
+    # `super().save()`'s object is a `call` node, which _dotted_text never
+    # descended into before; it must flatten to "super.save" rather than
+    # being silently dropped, so the resolver can walk base classes for it.
+    source = (
+        b"class Sub(Base):\n"
+        b"    def save(self):\n"
+        b"        return super().save()\n"
+    )
+    result = PythonExtractor().extract("pkg/sub.py", source)
+    calls = [r for r in result.refs if r.kind == "call"]
+    assert ("super.save", "pkg.sub.Sub.save") in {
+        (r.target_expr, r.src_qualified_name) for r in calls
+    }
+
+
+def test_super_call_with_args_ref_uses_super_sentinel():
+    # old-style `super(Cls, self).method()` must resolve the same way.
+    source = (
+        b"class Sub(Base):\n"
+        b"    def save(self):\n"
+        b"        return super(Sub, self).save()\n"
+    )
+    result = PythonExtractor().extract("pkg/sub.py", source)
+    calls = [r for r in result.refs if r.kind == "call"]
+    assert ("super.save", "pkg.sub.Sub.save") in {
+        (r.target_expr, r.src_qualified_name) for r in calls
+    }
+
+
 def test_syntax_error_file_extracts():
     result = extract("pkg/broken.py")
     qnames = {s.qualified_name for s in result.symbols}
@@ -156,7 +186,7 @@ def test_content_hash_stable_and_sensitive():
 def test_registry():
     extractor = get_extractor_for("a/b.py")
     assert extractor is not None and extractor.language == "python"
-    assert get_extractor_for("a/b.rs") is None
+    assert get_extractor_for("a/b.unregistered") is None
 
 
 def test_no_db_imports():
